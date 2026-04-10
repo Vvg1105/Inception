@@ -9,6 +9,10 @@ TRIBE-based neural feature pipeline for the city-elements sentence dataset.
 
 WhisperX is patched via `tribe/whisper_patch.py`: **float16 on CUDA**, **float32 on CPU**.
 
+### macOS
+
+WhisperX is forced to **`--device cpu` + `float32`** on Darwin so ctranslate2 does not request float16 on CPU (avoids a common crash). Override with `TRIBE_WHISPER_DEVICE` / `TRIBE_WHISPER_COMPUTE_TYPE` if you know what you’re doing.
+
 ### CPU-only (no GPU / broken CUDA)
 
 Set this **before** starting Python so TRIBE never loads weights on GPU and WhisperX uses CPU:

@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
@@ -25,7 +26,14 @@ def _get_transcript_from_audio(wav_filename: Path, language: str) -> pd.DataFram
     if language not in language_codes:
         raise ValueError(f"Language {language} not supported")
 
-    if force_cpu_requested():
+    env_dev = os.environ.get("TRIBE_WHISPER_DEVICE", "").strip().lower()
+    if env_dev in ("cpu", "cuda"):
+        device = env_dev
+    elif force_cpu_requested():
+        device = "cpu"
+    elif sys.platform == "darwin":
+        # ctranslate2 cannot use efficient float16 on macOS CPU; some PyTorch builds
+        # also report CUDA in ways that still run Whisper on CPU but pass float16.
         device = "cpu"
     else:
         import torch
