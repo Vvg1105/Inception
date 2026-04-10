@@ -1,0 +1,1109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dream City Void</title>
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #000;
+      overflow: hidden;
+      font-family: 'Courier New', Courier, monospace;
+      color: #888;
+      user-select: none;
+    }
+
+    #canvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+    }
+
+    /* ── Hint ─────────────────────────────────────────────────────────── */
+    #hint {
+      position: fixed;
+      top: 22px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 10px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: #2a2a35;
+      pointer-events: none;
+      z-index: 60;
+      transition: opacity 1.2s ease;
+    }
+
+    /* ── Popup ────────────────────────────────────────────────────────── */
+    #popup {
+      display: none;
+      position: fixed;
+      background: rgba(4, 4, 8, 0.94);
+      border: 1px solid #1a1a26;
+      border-radius: 3px;
+      padding: 14px 18px;
+      z-index: 100;
+      width: 250px;
+      backdrop-filter: blur(8px);
+      box-shadow: 0 4px 40px rgba(0,0,0,0.9), 0 0 0 1px rgba(80,80,160,0.08);
+    }
+
+    #popup-label {
+      font-size: 9px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: #333;
+      margin-bottom: 10px;
+    }
+
+    #objectInput {
+      width: 100%;
+      background: transparent;
+      border: none;
+      border-bottom: 1px solid #1e1e2e;
+      color: #99a;
+      font-family: inherit;
+      font-size: 13px;
+      padding: 4px 0 6px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    #objectInput:focus { border-bottom-color: #334; }
+    #objectInput::placeholder { color: #2a2a36; }
+
+    #popup-hint {
+      font-size: 9px;
+      color: #252530;
+      margin-top: 6px;
+      letter-spacing: 0.05em;
+      line-height: 1.7;
+    }
+
+    #popup-buttons {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    #popup button {
+      background: transparent;
+      border: 1px solid #1e1e2e;
+      color: #556;
+      font-family: inherit;
+      font-size: 9px;
+      letter-spacing: 0.15em;
+      padding: 5px 14px;
+      cursor: pointer;
+      text-transform: uppercase;
+      border-radius: 2px;
+      transition: all 0.15s;
+    }
+
+    #popup button:hover { border-color: #446; color: #99c; }
+    #placeBtn { border-color: #223; color: #668; }
+    #placeBtn:hover { border-color: #558; color: #aac; background: rgba(50,50,120,0.1); }
+
+    /* ── Bottom UI ────────────────────────────────────────────────────── */
+    #ui {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: rgba(2, 2, 5, 0.88);
+      border-top: 1px solid #0d0d14;
+      padding: 14px 28px;
+      display: flex;
+      align-items: flex-start;
+      gap: 48px;
+      z-index: 50;
+      backdrop-filter: blur(6px);
+    }
+
+    .slider-group {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .slider-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .slider-label {
+      font-size: 9px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: #333;
+      width: 54px;
+      flex-shrink: 0;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      width: 130px;
+      height: 2px;
+      background: #111118;
+      outline: none;
+      border-radius: 1px;
+      cursor: pointer;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 9px;
+      height: 9px;
+      background: #334;
+      border: 1px solid #446;
+      border-radius: 50%;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    input[type="range"]::-webkit-slider-thumb:hover { background: #668; }
+
+    .slider-val {
+      font-size: 9px;
+      color: #334;
+      width: 30px;
+      text-align: right;
+      flex-shrink: 0;
+    }
+
+    /* ── Object list ──────────────────────────────────────────────────── */
+    #obj-panel {
+      flex: 1;
+      min-width: 0;
+    }
+
+    #obj-title {
+      font-size: 8px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: #252530;
+      margin-bottom: 7px;
+    }
+
+    #obj-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+    }
+
+    .obj-tag {
+      font-size: 9px;
+      letter-spacing: 0.06em;
+      color: #33344a;
+      border: 1px solid #141420;
+      padding: 2px 8px;
+      border-radius: 2px;
+    }
+
+    #obj-empty {
+      font-size: 9px;
+      color: #1a1a22;
+      letter-spacing: 0.05em;
+    }
+
+    /* ── Loading indicator ────────────────────────────────────────────── */
+    /* ── Mood display ─────────────────────────────────────────────────── */
+    #mood {
+      position: fixed;
+      top: 24px;
+      right: 28px;
+      z-index: 60;
+      text-align: right;
+      pointer-events: none;
+    }
+
+    #mood-state {
+      font-size: 22px;
+      font-weight: 400;
+      letter-spacing: 0.06em;
+      color: #aabbdd;
+      line-height: 1;
+      transition: color 1.4s ease;
+    }
+
+    #mood-sub {
+      font-size: 9px;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: #667788;
+      margin-top: 5px;
+      transition: color 1.4s ease;
+    }
+
+    #loader {
+      display: none;
+      position: fixed;
+      bottom: 90px;
+      right: 28px;
+      font-size: 9px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: #334;
+      z-index: 60;
+      animation: pulse 1.2s ease infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 0.4; }
+      50%       { opacity: 1;   }
+    }
+  </style>
+</head>
+<body>
+
+<canvas id="canvas"></canvas>
+
+<div id="hint">click the ground to place objects</div>
+
+<div id="mood">
+  <div id="mood-state">desolate</div>
+  <div id="mood-sub">unfocused</div>
+</div>
+
+<!-- Placement popup -->
+<div id="popup">
+  <div id="popup-label">place object</div>
+  <input type="text" id="objectInput"
+         placeholder="building a · tower · tree · road…"
+         autocomplete="off" spellcheck="false">
+  <div id="popup-hint">
+    commercial: building a–n · skyscraper a–e · tower<br>
+    industrial: industrial a–t · factory · chimney · tank<br>
+    suburban: suburban a–u · house · tree · fence · path<br>
+    roads: road · bend · curve · crossroad · roundabout · bridge<br>
+    props: light · cone · barrier · sign · tile · planter
+  </div>
+  <div id="popup-buttons">
+    <button id="placeBtn">place</button>
+    <button id="cancelBtn">cancel</button>
+  </div>
+</div>
+
+<!-- Bottom bar -->
+<div id="ui">
+  <div class="slider-group">
+    <div class="slider-row">
+      <span class="slider-label">arousal</span>
+      <input type="range" id="s-arousal" min="0" max="1" step="0.01" value="0.5">
+      <span class="slider-val" id="v-arousal">0.50</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">valence</span>
+      <input type="range" id="s-valence" min="0" max="1" step="0.01" value="0.5">
+      <span class="slider-val" id="v-valence">0.50</span>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">focus</span>
+      <input type="range" id="s-focus" min="0" max="1" step="0.01" value="0.5">
+      <span class="slider-val" id="v-focus">0.50</span>
+    </div>
+  </div>
+
+  <div id="obj-panel">
+    <div id="obj-title">scene objects</div>
+    <div id="obj-tags">
+      <span id="obj-empty">— empty —</span>
+    </div>
+  </div>
+</div>
+
+<div id="loader">loading…</div>
+
+<!-- ─────────────────────────────────────────────────────────────────────── -->
+<script type="importmap">
+{
+  "imports": {
+    "three":          "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/":  "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls }   from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader }      from 'three/addons/loaders/GLTFLoader.js';
+import { DRACOLoader }     from 'three/addons/loaders/DRACOLoader.js';
+import { EffectComposer }  from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass }      from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { ShaderPass }      from 'three/addons/postprocessing/ShaderPass.js';
+import { OutputPass }      from 'three/addons/postprocessing/OutputPass.js';
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Pack paths
+// ═══════════════════════════════════════════════════════════════════════════
+const PKG = {
+  com: 'kenney_city-kit-commercial_2.1/Models/GLB format',
+  ind: 'kenney_city-kit-industrial_1.0/Models/GLB format',
+  rd:  'kenney_city-kit-roads/Models/GLB format',
+  sub: 'kenney_city-kit-suburban_20/Models/GLB format',
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Model map — normalized name → path relative to /assets/
+// ═══════════════════════════════════════════════════════════════════════════
+const MODEL_MAP = {
+  // ── Commercial buildings (a–n) ──────────────────────────────────────────
+  'building a':  `${PKG.com}/building-a.glb`,
+  'building b':  `${PKG.com}/building-b.glb`,
+  'building c':  `${PKG.com}/building-c.glb`,
+  'building d':  `${PKG.com}/building-d.glb`,
+  'building e':  `${PKG.com}/building-e.glb`,
+  'building f':  `${PKG.com}/building-f.glb`,
+  'building g':  `${PKG.com}/building-g.glb`,
+  'building h':  `${PKG.com}/building-h.glb`,
+  'building i':  `${PKG.com}/building-i.glb`,
+  'building j':  `${PKG.com}/building-j.glb`,
+  'building k':  `${PKG.com}/building-k.glb`,
+  'building l':  `${PKG.com}/building-l.glb`,
+  'building m':  `${PKG.com}/building-m.glb`,
+  'building n':  `${PKG.com}/building-n.glb`,
+  'building':    `${PKG.com}/building-a.glb`,
+  'office':      `${PKG.com}/building-b.glb`,
+  'store':       `${PKG.com}/building-f.glb`,
+  'shop':        `${PKG.com}/building-g.glb`,
+  'mall':        `${PKG.com}/building-h.glb`,
+  // ── Commercial skyscrapers ───────────────────────────────────────────────
+  'skyscraper a': `${PKG.com}/building-skyscraper-a.glb`,
+  'skyscraper b': `${PKG.com}/building-skyscraper-b.glb`,
+  'skyscraper c': `${PKG.com}/building-skyscraper-c.glb`,
+  'skyscraper d': `${PKG.com}/building-skyscraper-d.glb`,
+  'skyscraper e': `${PKG.com}/building-skyscraper-e.glb`,
+  'skyscraper':   `${PKG.com}/building-skyscraper-a.glb`,
+  'tower':        `${PKG.com}/building-skyscraper-b.glb`,
+  // ── Commercial low-detail ────────────────────────────────────────────────
+  'low building a': `${PKG.com}/low-detail-building-a.glb`,
+  'low building b': `${PKG.com}/low-detail-building-b.glb`,
+  'low building':   `${PKG.com}/low-detail-building-a.glb`,
+  'wide building':  `${PKG.com}/low-detail-building-wide-a.glb`,
+  // ── Commercial details ───────────────────────────────────────────────────
+  'awning':       `${PKG.com}/detail-awning.glb`,
+  'awning wide':  `${PKG.com}/detail-awning-wide.glb`,
+  'overhang':     `${PKG.com}/detail-overhang.glb`,
+  'parasol':      `${PKG.com}/detail-parasol-a.glb`,
+  // ── Industrial buildings (a–t) ───────────────────────────────────────────
+  'industrial a':  `${PKG.ind}/building-a.glb`,
+  'industrial b':  `${PKG.ind}/building-b.glb`,
+  'industrial c':  `${PKG.ind}/building-c.glb`,
+  'industrial d':  `${PKG.ind}/building-d.glb`,
+  'industrial e':  `${PKG.ind}/building-e.glb`,
+  'industrial f':  `${PKG.ind}/building-f.glb`,
+  'industrial g':  `${PKG.ind}/building-g.glb`,
+  'industrial h':  `${PKG.ind}/building-h.glb`,
+  'industrial i':  `${PKG.ind}/building-i.glb`,
+  'industrial j':  `${PKG.ind}/building-j.glb`,
+  'industrial k':  `${PKG.ind}/building-k.glb`,
+  'industrial l':  `${PKG.ind}/building-l.glb`,
+  'industrial m':  `${PKG.ind}/building-m.glb`,
+  'industrial n':  `${PKG.ind}/building-n.glb`,
+  'industrial o':  `${PKG.ind}/building-o.glb`,
+  'industrial p':  `${PKG.ind}/building-p.glb`,
+  'industrial q':  `${PKG.ind}/building-q.glb`,
+  'industrial r':  `${PKG.ind}/building-r.glb`,
+  'industrial s':  `${PKG.ind}/building-s.glb`,
+  'industrial t':  `${PKG.ind}/building-t.glb`,
+  'industrial':    `${PKG.ind}/building-a.glb`,
+  'factory':       `${PKG.ind}/building-c.glb`,
+  'warehouse':     `${PKG.ind}/building-g.glb`,
+  'plant':         `${PKG.ind}/building-k.glb`,
+  // ── Industrial details ───────────────────────────────────────────────────
+  'chimney':        `${PKG.ind}/chimney-basic.glb`,
+  'chimney large':  `${PKG.ind}/chimney-large.glb`,
+  'chimney medium': `${PKG.ind}/chimney-medium.glb`,
+  'chimney small':  `${PKG.ind}/chimney-small.glb`,
+  'tank':           `${PKG.ind}/detail-tank.glb`,
+  // ── Suburban buildings (type a–u) ────────────────────────────────────────
+  'suburban a':  `${PKG.sub}/building-type-a.glb`,
+  'suburban b':  `${PKG.sub}/building-type-b.glb`,
+  'suburban c':  `${PKG.sub}/building-type-c.glb`,
+  'suburban d':  `${PKG.sub}/building-type-d.glb`,
+  'suburban e':  `${PKG.sub}/building-type-e.glb`,
+  'suburban f':  `${PKG.sub}/building-type-f.glb`,
+  'suburban g':  `${PKG.sub}/building-type-g.glb`,
+  'suburban h':  `${PKG.sub}/building-type-h.glb`,
+  'suburban i':  `${PKG.sub}/building-type-i.glb`,
+  'suburban j':  `${PKG.sub}/building-type-j.glb`,
+  'suburban k':  `${PKG.sub}/building-type-k.glb`,
+  'suburban l':  `${PKG.sub}/building-type-l.glb`,
+  'suburban m':  `${PKG.sub}/building-type-m.glb`,
+  'suburban n':  `${PKG.sub}/building-type-n.glb`,
+  'suburban o':  `${PKG.sub}/building-type-o.glb`,
+  'suburban p':  `${PKG.sub}/building-type-p.glb`,
+  'suburban q':  `${PKG.sub}/building-type-q.glb`,
+  'suburban r':  `${PKG.sub}/building-type-r.glb`,
+  'suburban s':  `${PKG.sub}/building-type-s.glb`,
+  'suburban t':  `${PKG.sub}/building-type-t.glb`,
+  'suburban u':  `${PKG.sub}/building-type-u.glb`,
+  'suburban':    `${PKG.sub}/building-type-a.glb`,
+  'house':       `${PKG.sub}/building-type-a.glb`,
+  'apartment':   `${PKG.sub}/building-type-f.glb`,
+  // ── Suburban props ───────────────────────────────────────────────────────
+  'tree':         `${PKG.sub}/tree-small.glb`,
+  'small tree':   `${PKG.sub}/tree-small.glb`,
+  'big tree':     `${PKG.sub}/tree-large.glb`,
+  'large tree':   `${PKG.sub}/tree-large.glb`,
+  'planter':      `${PKG.sub}/planter.glb`,
+  'fence':        `${PKG.sub}/fence.glb`,
+  'fence low':    `${PKG.sub}/fence-low.glb`,
+  'driveway':     `${PKG.sub}/driveway-short.glb`,
+  'path':         `${PKG.sub}/path-short.glb`,
+  'stone path':   `${PKG.sub}/path-stones-short.glb`,
+  // ── Roads ────────────────────────────────────────────────────────────────
+  'road':             `${PKG.rd}/road-straight.glb`,
+  'road straight':    `${PKG.rd}/road-straight.glb`,
+  'straight':         `${PKG.rd}/road-straight.glb`,
+  'road bend':        `${PKG.rd}/road-bend.glb`,
+  'bend':             `${PKG.rd}/road-bend.glb`,
+  'road curve':       `${PKG.rd}/road-curve.glb`,
+  'curve':            `${PKG.rd}/road-curve.glb`,
+  'road corner':      `${PKG.rd}/road-bend.glb`,
+  'corner':           `${PKG.rd}/road-bend.glb`,
+  'intersection':     `${PKG.rd}/road-intersection.glb`,
+  'crossroads':       `${PKG.rd}/road-crossroad.glb`,
+  'crossroad':        `${PKG.rd}/road-crossroad.glb`,
+  't junction':       `${PKG.rd}/road-split.glb`,
+  't-junction':       `${PKG.rd}/road-split.glb`,
+  'split':            `${PKG.rd}/road-split.glb`,
+  'dead end':         `${PKG.rd}/road-end.glb`,
+  'road end':         `${PKG.rd}/road-end.glb`,
+  'roundabout':       `${PKG.rd}/road-roundabout.glb`,
+  'bridge':           `${PKG.rd}/road-bridge.glb`,
+  'crossing':         `${PKG.rd}/road-crossing.glb`,
+  'road square':      `${PKG.rd}/road-square.glb`,
+  'square':           `${PKG.rd}/road-square.glb`,
+  'slant':            `${PKG.rd}/road-slant.glb`,
+  // ── Road lights ──────────────────────────────────────────────────────────
+  'light':            `${PKG.rd}/light-curved.glb`,
+  'streetlight':      `${PKG.rd}/light-curved.glb`,
+  'lamp':             `${PKG.rd}/light-square.glb`,
+  'light double':     `${PKG.rd}/light-curved-double.glb`,
+  'light cross':      `${PKG.rd}/light-curved-cross.glb`,
+  'square light':     `${PKG.rd}/light-square.glb`,
+  // ── Road props ───────────────────────────────────────────────────────────
+  'cone':             `${PKG.rd}/construction-cone.glb`,
+  'barrier':          `${PKG.rd}/construction-barrier.glb`,
+  'sign':             `${PKG.rd}/sign-highway.glb`,
+  'highway sign':     `${PKG.rd}/sign-highway-wide.glb`,
+  'bridge pillar':    `${PKG.rd}/bridge-pillar.glb`,
+  'tile':             `${PKG.rd}/tile-high.glb`,
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Emotion state (to be driven by EEG later)
+// ═══════════════════════════════════════════════════════════════════════════
+const emotion = { arousal: 0.5, valence: 0.5, focus: 0.5 };
+
+// Scene registry
+const placedObjects = [];   // THREE.Object3D[]
+const placedNames   = [];   // string[]
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Renderer
+// ═══════════════════════════════════════════════════════════════════════════
+const canvas   = document.getElementById('canvas');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled   = true;
+renderer.shadowMap.type      = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace     = THREE.SRGBColorSpace;
+renderer.toneMapping          = THREE.ReinhardToneMapping;
+renderer.toneMappingExposure  = 1.1;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Scene
+// ═══════════════════════════════════════════════════════════════════════════
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xffffff);
+scene.fog        = new THREE.FogExp2(0xffffff, 0.018);
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Camera
+// ═══════════════════════════════════════════════════════════════════════════
+const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 600);
+camera.position.set(10, 7, 14);
+camera.lookAt(0, 0, 0);
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Orbit Controls
+// ═══════════════════════════════════════════════════════════════════════════
+const controls = new OrbitControls(camera, canvas);
+controls.enableDamping  = true;
+controls.dampingFactor  = 0.055;
+controls.minDistance    = 2;
+controls.maxDistance    = 150;
+controls.maxPolarAngle  = Math.PI / 2 - 0.04;
+controls.screenSpacePanning = false;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Lighting
+// ═══════════════════════════════════════════════════════════════════════════
+const ambientLight = new THREE.AmbientLight(0xffffff, 1.8);
+scene.add(ambientLight);
+
+const dirLight = new THREE.DirectionalLight(0x2244ff, 3.5);
+dirLight.position.set(18, 35, 12);
+dirLight.castShadow           = true;
+dirLight.shadow.mapSize.width  = 2048;
+dirLight.shadow.mapSize.height = 2048;
+dirLight.shadow.camera.near   = 1;
+dirLight.shadow.camera.far    = 200;
+dirLight.shadow.camera.left   = -60;
+dirLight.shadow.camera.right  = 60;
+dirLight.shadow.camera.top    = 60;
+dirLight.shadow.camera.bottom = -60;
+dirLight.shadow.bias          = -0.0005;
+dirLight.shadow.normalBias    = 0.02;
+scene.add(dirLight);
+
+// Cold fill from below / back
+const fillLight = new THREE.DirectionalLight(0x0a1430, 0.9);
+fillLight.position.set(-8, 3, -15);
+scene.add(fillLight);
+
+// Distant atmospheric rim points — neon city glow
+const rimDefs = [
+  { color: 0x0030ff, dist: 55 },
+  { color: 0xff1a00, dist: 65 },
+  { color: 0x8800cc, dist: 50 },
+  { color: 0x00ccaa, dist: 70 },
+  { color: 0xcc4400, dist: 60 },
+  { color: 0x0088ff, dist: 75 },
+];
+rimDefs.forEach((def, i) => {
+  const pt = new THREE.PointLight(def.color, 1.2, 100, 1.5);
+  const angle = (i / rimDefs.length) * Math.PI * 2;
+  pt.position.set(Math.cos(angle) * def.dist, 1, Math.sin(angle) * def.dist);
+  scene.add(pt);
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Ground
+// ═══════════════════════════════════════════════════════════════════════════
+const groundGeo = new THREE.PlaneGeometry(300, 300, 60, 60);
+const groundMat = new THREE.MeshStandardMaterial({
+  color:     0xe8e8ec,
+  roughness: 0.97,
+  metalness: 0.03,
+});
+const ground = new THREE.Mesh(groundGeo, groundMat);
+ground.rotation.x    = -Math.PI / 2;
+ground.receiveShadow = true;
+ground.name          = '__ground__';
+scene.add(ground);
+
+// Subtle grid overlay
+const gridHelper = new THREE.GridHelper(300, 120, 0x080810, 0x080810);
+gridHelper.position.y = 0.002;
+scene.add(gridHelper);
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Post-processing
+// ═══════════════════════════════════════════════════════════════════════════
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+
+const bloomPass = new UnrealBloomPass(
+  new THREE.Vector2(window.innerWidth, window.innerHeight),
+  0.9,   // strength
+  0.45,  // radius
+  0.75   // threshold
+);
+composer.addPass(bloomPass);
+
+// Film grain — custom shader for full control
+const GrainShader = {
+  uniforms: {
+    tDiffuse:  { value: null },
+    time:      { value: 0.0  },
+    intensity: { value: 0.05 },
+  },
+  vertexShader: /* glsl */`
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: /* glsl */`
+    uniform sampler2D tDiffuse;
+    uniform float     time;
+    uniform float     intensity;
+    varying vec2      vUv;
+
+    // High-quality hash
+    float hash(vec2 p) {
+      p = fract(p * vec2(127.1, 311.7));
+      p += dot(p, p + 19.19);
+      return fract(p.x * p.y);
+    }
+
+    void main() {
+      vec4  color = texture2D(tDiffuse, vUv);
+      float n     = hash(vUv + fract(time * 0.0073)) * 2.0 - 1.0;
+      // Bias toward dark to avoid brightening highlights
+      color.rgb  += n * intensity * (1.0 - dot(color.rgb, vec3(0.299, 0.587, 0.114)));
+      gl_FragColor = color;
+    }
+  `,
+};
+
+const grainPass = new ShaderPass(GrainShader);
+composer.addPass(grainPass);
+composer.addPass(new OutputPass());
+
+// ═══════════════════════════════════════════════════════════════════════════
+// GLTF / DRACO loader
+// ═══════════════════════════════════════════════════════════════════════════
+const dracoLoader = new DRACOLoader();
+dracoLoader.setDecoderPath('https://unpkg.com/three@0.160.0/examples/jsm/libs/draco/');
+
+const gltfLoader = new GLTFLoader();
+gltfLoader.setDRACOLoader(dracoLoader);
+
+// ─── Fallback: procedural building when no model file exists ────────────────
+function createFallbackObject(name) {
+  const group = new THREE.Group();
+  group.userData.objectName = name;
+
+  const floors = 1 + Math.floor(Math.random() * 6);
+  const fw     = 0.55 + Math.random() * 0.9;
+  const fd     = 0.55 + Math.random() * 0.9;
+  const fh     = 0.4  + Math.random() * 0.35;
+  const totalH = floors * fh;
+
+  // Body
+  const bodyGeo = new THREE.BoxGeometry(fw, totalH, fd);
+  const bodyMat = new THREE.MeshStandardMaterial({
+    color:     new THREE.Color(0x0e0e15),
+    roughness: 0.92,
+    metalness: 0.08,
+    emissive:  new THREE.Color(0, 0, 0),
+  });
+  const body = new THREE.Mesh(bodyGeo, bodyMat);
+  body.position.y     = totalH / 2;
+  body.castShadow     = true;
+  body.receiveShadow  = true;
+  group.add(body);
+
+  // Window lights
+  const cols = Math.max(1, Math.round(fw / 0.22));
+  for (let f = 0; f < floors; f++) {
+    for (let c = 0; c < cols; c++) {
+      if (Math.random() > 0.45) continue;
+      const wMat = new THREE.MeshStandardMaterial({
+        color:    new THREE.Color(0),
+        emissive: new THREE.Color(
+          0.3 + Math.random() * 0.4,
+          0.2 + Math.random() * 0.3,
+          0.05 + Math.random() * 0.2
+        ),
+        emissiveIntensity: 0.6 + Math.random() * 0.4,
+      });
+      const wGeo  = new THREE.PlaneGeometry(0.07, 0.1);
+      const wMesh = new THREE.Mesh(wGeo, wMat);
+      wMesh.position.set(
+        -fw / 2 + (c + 0.5) * (fw / cols),
+        f * fh + fh * 0.55,
+        fd / 2 + 0.001
+      );
+      group.add(wMesh);
+
+      // Back face windows too
+      const wMesh2 = wMesh.clone();
+      wMesh2.position.z = -(fd / 2 + 0.001);
+      wMesh2.rotation.y = Math.PI;
+      group.add(wMesh2);
+    }
+  }
+
+  return group;
+}
+
+// ─── Darken & stylise loaded GLTF materials ─────────────────────────────────
+function styliseMaterials(object) {
+  object.traverse(child => {
+    if (!child.isMesh) return;
+    child.castShadow    = true;
+    child.receiveShadow = true;
+
+    const mats = Array.isArray(child.material) ? child.material : [child.material];
+    mats.forEach(mat => {
+      // preserve original model colors
+      mat.roughness       = Math.max(mat.roughness ?? 1, 0.72);
+      mat.emissive        = new THREE.Color(0, 0, 0);
+      mat.emissiveIntensity = 1.0;
+      mat.needsUpdate     = true;
+    });
+  });
+}
+
+// ─── Load or generate a model and place it in the scene ─────────────────────
+const loaderEl = document.getElementById('loader');
+
+function placeObject(name, position) {
+  const key  = name.trim().toLowerCase();
+  const file = MODEL_MAP[key] ?? null;
+
+  const commit = (root) => {
+    root.userData.objectName = name;
+
+    // Random variation — no two identical
+    const scale = 0.78 + Math.random() * 0.54;
+    root.scale.setScalar(scale);
+    root.position.copy(position);
+    root.rotation.y = Math.random() * Math.PI * 2;
+    // Tiny tilt for organic feel
+    root.rotation.z = (Math.random() - 0.5) * 0.012;
+
+    scene.add(root);
+    placedObjects.push(root);
+    placedNames.push(name);
+    refreshObjectList();
+    applyEmotion();           // tint the new object immediately
+    loaderEl.style.display = 'none';
+  };
+
+  if (file) {
+    loaderEl.style.display = 'block';
+    gltfLoader.load(
+      `/assets/${file}`,
+      (gltf) => {
+        styliseMaterials(gltf.scene);
+        commit(gltf.scene);
+      },
+      undefined,
+      (err) => {
+        console.warn(`[DCV] Model not found (${file}), generating fallback.`, err);
+        commit(createFallbackObject(name));
+      }
+    );
+  } else {
+    console.info(`[DCV] No mapping for "${name}", generating fallback.`);
+    commit(createFallbackObject(name));
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Cursor light — follows mouse on ground plane
+// ═══════════════════════════════════════════════════════════════════════════
+const cursorLight = new THREE.PointLight(0x6688cc, 2.5, 18, 2);
+cursorLight.position.set(0, 0.6, 0);
+scene.add(cursorLight);
+
+// Small emissive disc so the light source is faintly visible
+const cursorDiscGeo = new THREE.CircleGeometry(0.18, 32);
+const cursorDiscMat = new THREE.MeshBasicMaterial({ color: 0x8899cc, transparent: true, opacity: 0.25 });
+const cursorDisc    = new THREE.Mesh(cursorDiscGeo, cursorDiscMat);
+cursorDisc.rotation.x = -Math.PI / 2;
+cursorDisc.position.y = 0.003;
+scene.add(cursorDisc);
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Raycast + Popup
+// ═══════════════════════════════════════════════════════════════════════════
+const raycaster  = new THREE.Raycaster();
+const mouseNDC   = new THREE.Vector2();
+let   pendingPos = null;
+let   popupOpen  = false;
+let   mouseDownXY = { x: 0, y: 0 };
+
+// Track cursor world position for the light
+const _cursorNDC = new THREE.Vector2();
+canvas.addEventListener('mousemove', (e) => {
+  _cursorNDC.x =  (e.clientX / window.innerWidth)  * 2 - 1;
+  _cursorNDC.y = -(e.clientY / window.innerHeight)  * 2 + 1;
+  raycaster.setFromCamera(_cursorNDC, camera);
+  const hits = raycaster.intersectObject(ground, false);
+  if (hits.length > 0) {
+    const p = hits[0].point;
+    cursorLight.position.set(p.x, 0.6, p.z);
+    cursorDisc.position.set(p.x, 0.003, p.z);
+  }
+});
+
+const popup       = document.getElementById('popup');
+const objectInput = document.getElementById('objectInput');
+const placeBtn    = document.getElementById('placeBtn');
+const cancelBtn   = document.getElementById('cancelBtn');
+
+canvas.addEventListener('mousedown', (e) => {
+  mouseDownXY = { x: e.clientX, y: e.clientY };
+});
+
+canvas.addEventListener('click', (e) => {
+  if (popupOpen) return;
+
+  // Ignore drag
+  const dx = e.clientX - mouseDownXY.x;
+  const dy = e.clientY - mouseDownXY.y;
+  if (Math.hypot(dx, dy) > 6) return;
+
+  mouseNDC.x =  (e.clientX / window.innerWidth)  * 2 - 1;
+  mouseNDC.y = -(e.clientY / window.innerHeight)  * 2 + 1;
+
+  raycaster.setFromCamera(mouseNDC, camera);
+  const hits = raycaster.intersectObject(ground, false);
+
+  if (hits.length > 0) {
+    pendingPos = hits[0].point.clone();
+    openPopup(e.clientX, e.clientY);
+  }
+});
+
+function openPopup(cx, cy) {
+  popupOpen        = true;
+  controls.enabled = false;
+
+  const pw = 260, ph = 120;
+  const uiH = 80;  // approximate bottom bar height
+  const px = Math.min(cx + 12, window.innerWidth  - pw - 8);
+  const py = Math.min(cy + 12, window.innerHeight - ph - uiH - 8);
+
+  popup.style.left    = px + 'px';
+  popup.style.top     = py + 'px';
+  popup.style.display = 'block';
+  objectInput.value   = '';
+  setTimeout(() => objectInput.focus(), 40);
+}
+
+function closePopup() {
+  popup.style.display = 'none';
+  popupOpen           = false;
+  controls.enabled    = true;
+  pendingPos          = null;
+}
+
+placeBtn.addEventListener('click', () => {
+  const name = objectInput.value.trim();
+  if (name && pendingPos) placeObject(name, pendingPos.clone());
+  closePopup();
+});
+
+cancelBtn.addEventListener('click', closePopup);
+
+objectInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter')  placeBtn.click();
+  if (e.key === 'Escape') closePopup();
+});
+
+// Clicking outside popup closes it
+document.addEventListener('mousedown', (e) => {
+  if (popupOpen && !popup.contains(e.target) && e.target !== canvas) {
+    closePopup();
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Object list UI
+// ═══════════════════════════════════════════════════════════════════════════
+function refreshObjectList() {
+  const container = document.getElementById('obj-tags');
+  const empty     = document.getElementById('obj-empty');
+
+  if (placedNames.length === 0) {
+    if (empty) empty.style.display = '';
+    container.querySelectorAll('.obj-tag').forEach(el => el.remove());
+    return;
+  }
+
+  if (empty) empty.style.display = 'none';
+
+  // Count occurrences
+  const counts = {};
+  placedNames.forEach(n => (counts[n] = (counts[n] || 0) + 1));
+
+  container.querySelectorAll('.obj-tag').forEach(el => el.remove());
+  Object.entries(counts).forEach(([n, c]) => {
+    const tag = document.createElement('span');
+    tag.className   = 'obj-tag';
+    tag.textContent = c > 1 ? `${n} ×${c}` : n;
+    container.appendChild(tag);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Emotion — scene reactivity
+// ═══════════════════════════════════════════════════════════════════════════
+const _fogLow  = new THREE.Color(0xfff0e8);  // warm white / amber
+const _fogHigh = new THREE.Color(0xe8f0ff);  // cool white / blue
+const _ltWarm  = new THREE.Color(0xff5010);  // warm directional
+const _ltCool  = new THREE.Color(0x1840ff);  // cold directional
+
+function applyEmotion() {
+  const { arousal, valence, focus } = emotion;
+
+  // ── Fog ─────────────────────────────────────────────────────────────────
+  scene.fog.density = 0.006 + arousal * 0.034;
+  const fc = new THREE.Color().lerpColors(_fogLow, _fogHigh, valence);
+  scene.fog.color.copy(fc);
+  scene.background.copy(fc);
+
+  // ── Directional light temperature ───────────────────────────────────────
+  dirLight.color.lerpColors(_ltWarm, _ltCool, valence);
+  dirLight.intensity = 2.5 + arousal * 1.5;
+
+  // ── Ambient tint ─────────────────────────────────────────────────────────
+  const ambHue = new THREE.Color().lerpColors(
+    new THREE.Color(1.0, 0.92, 0.85),   // warm white
+    new THREE.Color(0.88, 0.93, 1.0),   // cool white
+    valence
+  );
+  ambientLight.color.copy(ambHue);
+
+  // ── Emissive tint on all placed objects ─────────────────────────────────
+  // arousal → red glow; valence modulates toward blue
+  const rCh = arousal * 0.22;
+  const bCh = (1 - valence) * 0.04;
+  placedObjects.forEach(obj => {
+    obj.traverse(child => {
+      if (!child.isMesh) return;
+      const mats = Array.isArray(child.material) ? child.material : [child.material];
+      mats.forEach(mat => {
+        if (mat.emissive !== undefined) {
+          // Don't override the warm window lights — only darken their base
+          if (mat.emissiveIntensity > 0.5) return;
+          mat.emissive.setRGB(rCh, 0, bCh);
+          mat.needsUpdate = true;
+        }
+      });
+    });
+  });
+
+  // ── Bloom — focus sharpens / intensifies ────────────────────────────────
+  bloomPass.strength  = 0.25 + focus * 2.2;
+  bloomPass.threshold = 0.88 - focus * 0.40;
+  bloomPass.radius    = 0.55 - focus * 0.32;
+
+  // ── Grain — arousal feeds noise ─────────────────────────────────────────
+  grainPass.uniforms.intensity.value = 0.02 + arousal * 0.075;
+
+  // ── Cursor light — temperature tracks valence, intensity tracks arousal ──
+  cursorLight.color.lerpColors(_ltWarm, _ltCool, valence);
+  cursorLight.intensity = 1.8 + arousal * 2.2;
+  cursorLight.distance  = 12 + focus * 10;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Mood display
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Circumplex affect model — quadrant word tables
+// Rows = arousal bands (0 low → 2 high), Cols = valence bands (0 low → 2 high)
+const MOOD_WORDS = [
+  // low arousal
+  ['hollow',    'adrift',    'serene'  ],
+  // mid arousal
+  ['desolate',  'liminal',   'lucid'   ],
+  // high arousal
+  ['fractured', 'electric',  'radiant' ],
+];
+
+const FOCUS_WORDS = [
+  'dissolving',   // 0.0–0.33
+  'unfocused',    // 0.33–0.66
+  'crystalline',  // 0.66–1.0
+];
+
+const moodStateEl = document.getElementById('mood-state');
+const moodSubEl   = document.getElementById('mood-sub');
+
+// Warm (#aa7744) ↔ cool (#7799bb) based on valence
+const _moodWarm = { r: 0xcc, g: 0x88, b: 0x55 };  // amber — readable on black
+const _moodCool = { r: 0x99, g: 0xbb, b: 0xdd };  // steel blue — readable on black
+
+function lerp(a, b, t) { return Math.round(a + (b - a) * t); }
+
+function updateMoodDisplay() {
+  const { arousal, valence, focus } = emotion;
+
+  // Pick word
+  const aIdx = Math.min(2, Math.floor(arousal * 3));
+  const vIdx = Math.min(2, Math.floor(valence * 3));
+  const fIdx = Math.min(2, Math.floor(focus   * 3));
+  moodStateEl.textContent = MOOD_WORDS[aIdx][vIdx];
+  moodSubEl.textContent   = FOCUS_WORDS[fIdx];
+
+  // Interpolate text color warm ↔ cool with valence
+  const r = lerp(_moodWarm.r, _moodCool.r, valence);
+  const g = lerp(_moodWarm.g, _moodCool.g, valence);
+  const b = lerp(_moodWarm.b, _moodCool.b, valence);
+  moodStateEl.style.color = `rgb(${r},${g},${b})`;
+
+  // Sub text — visible but secondary
+  const sr = lerp(0x88, 0x55, valence);
+  const sg = lerp(0x66, 0x77, valence);
+  const sb = lerp(0x55, 0x99, valence);
+  moodSubEl.style.color = `rgb(${sr},${sg},${sb})`;
+}
+
+// ─── Slider wiring ──────────────────────────────────────────────────────────
+['arousal', 'valence', 'focus'].forEach(key => {
+  const slider  = document.getElementById(`s-${key}`);
+  const display = document.getElementById(`v-${key}`);
+  slider.addEventListener('input', () => {
+    emotion[key]        = parseFloat(slider.value);
+    display.textContent = emotion[key].toFixed(2);
+    applyEmotion();
+    updateMoodDisplay();
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Resize
+// ═══════════════════════════════════════════════════════════════════════════
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  composer.setSize(window.innerWidth, window.innerHeight);
+  bloomPass.resolution.set(window.innerWidth, window.innerHeight);
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Animation loop
+// ═══════════════════════════════════════════════════════════════════════════
+const clock = new THREE.Clock();
+
+// Fade hint after 4 s
+setTimeout(() => { document.getElementById('hint').style.opacity = '0'; }, 4000);
+
+function animate() {
+  requestAnimationFrame(animate);
+
+  const t  = clock.getElapsedTime();
+  const dt = clock.getDelta();          // consumed; keep clock ticking
+
+  controls.update();
+
+  grainPass.uniforms.time.value = t;
+
+  // Slow ambient pulse (slightly tied to arousal)
+  const pulse = Math.sin(t * (0.4 + emotion.arousal * 1.8)) * 0.06;
+  ambientLight.intensity = 1.2 + pulse;
+
+  // Lazy directional light drift — dream-like
+  dirLight.position.x = 18 + Math.sin(t * 0.05) * 4;
+  dirLight.position.z = 12 + Math.cos(t * 0.07) * 3;
+
+  composer.render();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Boot
+// ═══════════════════════════════════════════════════════════════════════════
+applyEmotion();
+updateMoodDisplay();
+animate();
+</script>
+</body>
+</html>
