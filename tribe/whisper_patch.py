@@ -10,7 +10,6 @@ import tempfile
 from pathlib import Path
 
 import pandas as pd
-import torch
 
 logger = logging.getLogger(__name__)
 
@@ -18,13 +17,21 @@ _applied = False
 
 
 def _get_transcript_from_audio(wav_filename: Path, language: str) -> pd.DataFrame:
+    from tribe.env_flags import force_cpu_requested
+
     language_codes = dict(
         english="en", french="fr", spanish="es", dutch="nl", chinese="zh"
     )
     if language not in language_codes:
         raise ValueError(f"Language {language} not supported")
 
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    if force_cpu_requested():
+        device = "cpu"
+    else:
+        import torch
+
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+
     override = os.environ.get("TRIBE_WHISPER_COMPUTE_TYPE", "").strip()
     if override:
         compute_type = override

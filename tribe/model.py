@@ -3,12 +3,15 @@ TRIBE v2 loading and prediction helpers for the imagine project.
 
 Mirrors insilico's core.model behavior; weights cache defaults to ./cache here.
 """
+import os
 import tempfile
 from pathlib import Path
 from typing import Optional
 
 import numpy as np
 import pandas as pd
+
+from tribe.env_flags import force_cpu_requested
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_CACHE = PROJECT_ROOT / "cache"
@@ -17,6 +20,8 @@ DEFAULT_CACHE = PROJECT_ROOT / "cache"
 def _get_device() -> str:
     import torch
 
+    if force_cpu_requested():
+        return "cpu"
     if torch.cuda.is_available():
         return "cuda"
     if torch.backends.mps.is_available():
@@ -26,6 +31,9 @@ def _get_device() -> str:
 
 def load_model(cache_folder: Optional[str] = None):
     """Load pretrained TRIBE v2; weights download on first run (~2GB) into cache_folder."""
+    if force_cpu_requested():
+        os.environ["CUDA_VISIBLE_DEVICES"] = ""
+
     from tribe.whisper_patch import apply_whisper_compute_patch
     from tribev2 import TribeModel
 
@@ -36,6 +44,9 @@ def load_model(cache_folder: Optional[str] = None):
 
     device = _get_device()
     if device != "cuda":
+        if getattr(model, "_model", None) is not None:
+            model._model.cpu()
+
         for attr in ("text_feature", "audio_feature", "video_feature", "image_feature"):
             ext = getattr(model.data, attr, None)
             if ext is not None and getattr(ext, "device", None) == "cuda":

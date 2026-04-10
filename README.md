@@ -8,3 +8,13 @@ TRIBE-based neural feature pipeline for the city-elements sentence dataset.
 - **RunPod / GPU:** see [RUNPOD.md](RUNPOD.md)
 
 WhisperX is patched via `tribe/whisper_patch.py`: **float16 on CUDA**, **float32 on CPU**.
+
+### CPU-only (no GPU / broken CUDA)
+
+Set this **before** starting Python so TRIBE never loads weights on GPU and WhisperX uses CPU:
+
+```bash
+export TRIBE_FORCE_CPU=1
+export CUDA_VISIBLE_DEVICES=
+python -m pipeline.neural_matrix --csv city_elements_dataset.csv --output outputs/city_elements_neural.npz
+```
