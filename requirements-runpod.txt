@@ -1,0 +1,17 @@
+# For RunPod (or any) images that ALREADY ship torch+torchvision+torchaudio with CUDA.
+# Do not `pip install torch` from PyPI here — it can replace the GPU build with CPU wheels.
+#
+# If `pip install` on tribev2 complains about torch version (e.g. image has torch 2.8 but
+# tribev2 pins torch<2.7), either pick an older PyTorch template, or install with:
+#   pip install git+https://github.com/facebookresearch/tribev2.git --no-deps
+#   pip install neuralset==0.0.2 neuraltrain==0.0.2
+#   (then install remaining deps from https://github.com/facebookresearch/tribev2 pyproject)
+
+git+https://github.com/facebookresearch/tribev2.git
+nilearn
+nibabel
+numpy
+scipy
+scikit-learn
+pandas
+matplotlib

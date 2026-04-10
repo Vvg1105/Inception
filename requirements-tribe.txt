@@ -1,0 +1,18 @@
+# Local / CPU Mac venv: includes PyTorch wheels from PyPI.
+# GPU cloud images with CUDA PyTorch preinstalled: use requirements-runpod.txt instead.
+#
+# 1) source .venv/bin/activate
+# 2) pip install -r requirements-tribe.txt
+#
+torch
+torchvision
+torchaudio
+# tribev2 is not on PyPI; install from Meta's repo:
+git+https://github.com/facebookresearch/tribev2.git
+nilearn
+nibabel
+numpy
+scipy
+scikit-learn
+pandas
+matplotlib

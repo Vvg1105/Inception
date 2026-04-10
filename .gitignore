@@ -1,0 +1,35 @@
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.so
+.Python
+*.egg-info/
+.eggs/
+dist/
+build/
+
+.env
+.env.*
+!.env.example
+
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# TRIBE / HF / uv caches (large)
+cache/
+.huggingface/
+hf_cache/
+
+# Pipeline outputs and resume shards
+outputs/
+**/*_row_cache/
+
+# Jupyter
+.ipynb_checkpoints/
+
+.pytest_cache/
+.coverage
+htmlcov/
