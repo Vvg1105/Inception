@@ -12,6 +12,11 @@ Layout (under ``--dataset-root``, default ``data/photo_dataset``)::
 Writes ``outputs/photo_tribe_neural.npz`` (same bundle keys as ``neural_matrix`` for
 ``train_element_classifier``) and optional row-cache shards for resume.
 
+By default, if ``--output`` already exists, **merges** with it: rows for images still under
+``source/`` are reused (no second TRIBE pass), **new** images are processed and appended,
+and rows for files you removed from disk are **kept**. Pass ``--no-merge-output`` to build
+only from the current tree (replace the matrix).
+
 By default skips **Whisper/ASR** on video audio (``TRIBE_VIDEO_SKIP_WHISPER=1``) for speed;
 pass ``--video-whisper`` to run the full tribev2 word pipeline.
 
@@ -170,6 +175,42 @@ def image_to_looped_mp4(
     subprocess.run(cmd, check=True)
 
 
+def _load_photo_npz_rows(path: Path) -> tuple[dict[str, dict], int] | None:
+    """Load existing photo matrix .npz into ``source_key -> row`` and ``n_vertices``."""
+    try:
+        z = np.load(path, allow_pickle=True)
+    except Exception as e:
+        logger.warning("Could not read existing output for merge: %s", e)
+        return None
+    need = ("X", "texts", "labels_combined", "n_segments_per_sentence")
+    if not all(k in z.files for k in need):
+        return None
+    X = np.asarray(z["X"], dtype=np.float32)
+    if X.ndim != 2 or X.shape[0] == 0:
+        return None
+    n_vertices = int(X.shape[1])
+    texts = z["texts"]
+    labels = z["labels_combined"]
+    n_seg = np.asarray(z["n_segments_per_sentence"], dtype=np.int64)
+    n = X.shape[0]
+    if len(texts) != n or len(labels) != n or n_seg.shape[0] != n:
+        logger.warning("Existing output has mismatched row lengths; not merging.")
+        return None
+    out: dict[str, dict] = {}
+    for i in range(n):
+        label = str(labels[i])
+        rel = str(texts[i])
+        norm = normalize_class_label(label)
+        sk = _sample_key(norm, rel)
+        out[sk] = {
+            "pooled": np.asarray(X[i], dtype=np.float32, copy=True),
+            "n_segments": int(n_seg[i]),
+            "label": norm,
+            "rel_posix": rel,
+        }
+    return out, n_vertices
+
+
 def iter_photo_samples(
     *,
     dataset_root: Path,
@@ -202,7 +243,15 @@ def iter_photo_samples(
             key = _sample_key(norm, rel_posix)
             out.append((norm, p.resolve(), rel_posix, key))
     out.sort(key=lambda t: (t[0], t[2]))
-    return out
+    seen: set[str] = set()
+    deduped: list[tuple[str, Path, str, str]] = []
+    for t in out:
+        if t[3] in seen:
+            logger.warning("Duplicate sample key (skip second path): %s", t[3])
+            continue
+        seen.add(t[3])
+        deduped.append(t)
+    return deduped
 
 
 def build_photo_neural_bundle(
@@ -219,6 +268,8 @@ def build_photo_neural_bundle(
     verbose_tribe: bool,
     limit: int | None,
     class_names: tuple[str, ...] | None,
+    merge_output_path: Path | None,
+    merge_output: bool,
 ) -> dict:
     ffmpeg_exe = _check_ffmpeg()
     samples = iter_photo_samples(
@@ -228,11 +279,25 @@ def build_photo_neural_bundle(
     )
     if limit is not None:
         samples = samples[:limit]
-    if not samples:
+    if not samples and not (
+        merge_output and merge_output_path is not None and merge_output_path.is_file()
+    ):
         raise RuntimeError(
             f"No images found under {dataset_root / source_subdir}. "
             f"Add files ({', '.join(sorted(IMAGE_EXTENSIONS))}) to class subfolders."
         )
+
+    merged_rows: dict[str, dict] = {}
+    if merge_output and merge_output_path is not None and merge_output_path.is_file():
+        loaded = _load_photo_npz_rows(merge_output_path)
+        if loaded is not None:
+            merged_rows, nv0 = loaded
+            logger.info(
+                "Merge: loaded %d rows from %s (n_vertices=%d)",
+                len(merged_rows),
+                merge_output_path,
+                nv0,
+            )
 
     use_cache = row_cache_dir is not None
     if use_cache:
@@ -242,6 +307,9 @@ def build_photo_neural_bundle(
 
     model = None
     expected_nv: int | None = None
+    if merged_rows:
+        any_row = next(iter(merged_rows.values()))
+        expected_nv = int(any_row["pooled"].shape[0])
     pooled_list: list[np.ndarray] = []
     n_seg_list: list[int] = []
     texts: list[str] = []
@@ -250,25 +318,48 @@ def build_photo_neural_bundle(
 
     for idx, (label, img_path, rel_posix, source_key) in enumerate(samples):
         out_mp4 = gen_root / Path(rel_posix).with_suffix(".mp4")
-        if force_reencode and out_mp4.is_file():
-            out_mp4.unlink()
-        if not out_mp4.is_file():
-            try:
-                log_rel = out_mp4.relative_to(dataset_root)
-            except ValueError:
-                log_rel = out_mp4
-            logger.info("Encoding %d/%d → %s", idx + 1, len(samples), log_rel)
-            image_to_looped_mp4(
-                image_path=img_path,
-                out_mp4=out_mp4,
-                duration_sec=duration_sec,
-                fps=fps,
-                ffmpeg_exe=ffmpeg_exe,
-            )
-
         shard_path = (row_cache_dir / _shard_name(source_key)) if use_cache else None
         hit: tuple[np.ndarray, int] | None = None
-        if use_cache and shard_path is not None and not force_recompute:
+        from_prior_output = False
+
+        if merge_output and source_key in merged_rows and not force_recompute:
+            row = merged_rows[source_key]
+            pooled = np.asarray(row["pooled"], dtype=np.float32)
+            n_seg = int(row["n_segments"])
+            if expected_nv is None:
+                expected_nv = int(pooled.shape[0])
+            elif pooled.shape[0] != expected_nv:
+                raise RuntimeError(
+                    f"{rel_posix}: merged output n_vertices {pooled.shape[0]} != {expected_nv}"
+                )
+            hit = (pooled, n_seg)
+            from_prior_output = True
+            logger.info(
+                "Existing output row %d/%d %s (segments=%d, skip encode & TRIBE)",
+                idx + 1,
+                len(samples),
+                rel_posix,
+                n_seg,
+            )
+
+        if hit is None:
+            if force_reencode and out_mp4.is_file():
+                out_mp4.unlink()
+            if not out_mp4.is_file():
+                try:
+                    log_rel = out_mp4.relative_to(dataset_root)
+                except ValueError:
+                    log_rel = out_mp4
+                logger.info("Encoding %d/%d → %s", idx + 1, len(samples), log_rel)
+                image_to_looped_mp4(
+                    image_path=img_path,
+                    out_mp4=out_mp4,
+                    duration_sec=duration_sec,
+                    fps=fps,
+                    ffmpeg_exe=ffmpeg_exe,
+                )
+
+        if hit is None and use_cache and shard_path is not None and not force_recompute:
             hit = _load_photo_shard(
                 shard_path,
                 expected_key=source_key,
@@ -282,16 +373,16 @@ def build_photo_neural_bundle(
                     logger.warning("Shard dim mismatch; recomputing %s", shard_path.name)
                     hit = None
 
-        if hit is not None:
+        if hit is not None and not from_prior_output:
             pooled, n_seg = hit
             logger.info(
-                "Cache hit %d/%d %s (segments=%d)",
+                "Row-cache hit %d/%d %s (segments=%d)",
                 idx + 1,
                 len(samples),
                 rel_posix,
                 n_seg,
             )
-        else:
+        elif hit is None:
             if model is None:
                 logger.info("Loading TRIBE (first run may download weights)...")
                 model = load_model(cache_folder=cache_folder)
@@ -327,10 +418,24 @@ def build_photo_neural_bundle(
                 pooled.shape[0],
             )
 
-        pooled_list.append(pooled)
-        n_seg_list.append(n_seg)
-        texts.append(rel_posix)
-        raw_labels.append(label)
+        merged_rows[source_key] = {
+            "pooled": np.asarray(pooled, dtype=np.float32, copy=True),
+            "n_segments": int(n_seg),
+            "label": label,
+            "rel_posix": rel_posix,
+        }
+
+    if not merged_rows:
+        raise RuntimeError("No rows to write (empty merge and no samples).")
+
+    key_order = sorted(
+        merged_rows.keys(),
+        key=lambda k: (merged_rows[k]["label"], merged_rows[k]["rel_posix"]),
+    )
+    pooled_list = [merged_rows[k]["pooled"] for k in key_order]
+    n_seg_list = [merged_rows[k]["n_segments"] for k in key_order]
+    texts = [merged_rows[k]["rel_posix"] for k in key_order]
+    raw_labels = [merged_rows[k]["label"] for k in key_order]
 
     sizes = ["na"] * len(raw_labels)
     X = np.stack(pooled_list, axis=0).astype(np.float32, copy=False)
@@ -388,6 +493,11 @@ def main(argv: list[str] | None = None) -> int:
         "--no-row-cache",
         action="store_true",
         help="Disable resume cache",
+    )
+    p.add_argument(
+        "--no-merge-output",
+        action="store_true",
+        help="Do not load/merge existing --output; matrix includes only current source images",
     )
     p.add_argument(
         "--force-recompute",
@@ -482,6 +592,8 @@ def main(argv: list[str] | None = None) -> int:
             verbose_tribe=args.verbose_tribe,
             limit=args.limit,
             class_names=class_tuple,
+            merge_output_path=args.output.resolve(),
+            merge_output=not args.no_merge_output,
         )
     except (RuntimeError, FileNotFoundError, subprocess.CalledProcessError) as e:
         logger.error("%s", e)
@@ -496,6 +608,7 @@ def main(argv: list[str] | None = None) -> int:
         "modality": "photo_video",
         "TRIBE_VIDEO_SKIP_WHISPER": os.environ.get("TRIBE_VIDEO_SKIP_WHISPER", ""),
         "TRIBE_FEATURES_VIDEO_ONLY": os.environ.get("TRIBE_FEATURES_VIDEO_ONLY", ""),
+        "merge_output": not args.no_merge_output,
     }
     bundle_meta = {
         "size_classes": bundle["size_classes"],
