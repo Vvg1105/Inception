@@ -2,7 +2,12 @@
 TRIBE v2 loading and prediction helpers for the imagine project.
 
 Mirrors insilico's core.model behavior; weights cache defaults to ./cache here.
+
+Video paths can skip Whisper/ASR when ``TRIBE_VIDEO_SKIP_WHISPER=1`` (see ``tribe.env_flags``).
+Set ``TRIBE_FEATURES_VIDEO_ONLY=1`` (default in ``photo_neural_matrix``) so tribev2 only **prepares**
+the video extractor — Llama and Wav2Vec are not loaded for inference.
 """
+import logging
 import os
 import tempfile
 from pathlib import Path
@@ -11,7 +16,13 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
-from tribe.env_flags import force_cpu_requested
+from tribe.env_flags import (
+    features_video_only_requested,
+    force_cpu_requested,
+    video_skip_whisper_for_video_path,
+)
+
+logger = logging.getLogger(__name__)
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_CACHE = PROJECT_ROOT / "cache"
@@ -75,11 +86,20 @@ def _force_extractor_tree_cpu(ext: object) -> None:
                 pass
 
 
-def load_model(cache_folder: Optional[str] = None):
+def load_model(
+    cache_folder: Optional[str] = None,
+    *,
+    features_video_only: Optional[bool] = None,
+):
     """Load pretrained TRIBE v2; weights download on first run (~2GB) into cache_folder.
 
     Uses **CUDA** when a real GPU allocation succeeds and ``TRIBE_FORCE_CPU`` is unset
     (e.g. RunPod). Set ``TRIBE_FORCE_CPU=1`` for Mac / CPU-only PyTorch.
+
+    When ``features_video_only`` is true (or env ``TRIBE_FEATURES_VIDEO_ONLY=1``), the
+    experiment only **prepares** the video feature extractor for dataloaders — text and
+    audio encoders are not loaded for inference (see ``tribe.env_flags``). Use only for
+    **video** inputs; text CSV pipelines should leave this off.
     """
     cuda_ok = _cuda_really_works()
     use_cpu = force_cpu_requested() or not cuda_ok
@@ -93,10 +113,22 @@ def load_model(cache_folder: Optional[str] = None):
 
     cache = cache_folder or str(DEFAULT_CACHE)
     brain_device = "cpu" if use_cpu else _get_device()
+
+    if features_video_only is None:
+        features_video_only = features_video_only_requested()
+    config_update = None
+    if features_video_only:
+        config_update = {"data.features_to_use": ["video"]}
+        logger.info(
+            "TRIBE_FEATURES_VIDEO_ONLY: data.features_to_use=['video'] "
+            "(text/audio extractors not prepared — video inference only)."
+        )
+
     model = TribeModel.from_pretrained(
         "facebook/tribev2",
         cache_folder=cache,
         device=brain_device,
+        config_update=config_update,
     )
 
     if brain_device != "cuda":
@@ -125,8 +157,44 @@ def load_model(cache_folder: Optional[str] = None):
     return model
 
 
+def build_video_events_dataframe(video_path: str) -> pd.DataFrame:
+    """Build TRIBE events for a video file (same validation as ``TribeModel.get_events_dataframe``).
+
+    When :func:`tribe.env_flags.video_skip_whisper_for_video_path` is true, skips
+    ``ExtractWordsFromAudio`` / Whisper / word alignment (faster; text features use
+    ``allow_missing`` in the pretrained config).
+    """
+    from tribev2.demo_utils import VALID_SUFFIXES, get_audio_and_text_events
+
+    path = Path(video_path)
+    suffix = path.suffix.lower()
+    if suffix not in VALID_SUFFIXES["video_path"]:
+        raise ValueError(
+            "video_path must end with one of "
+            f"{sorted(VALID_SUFFIXES['video_path'])}, got {suffix!r}"
+        )
+    if not path.is_file():
+        raise FileNotFoundError(f"video_path does not exist: {path}")
+
+    audio_only = video_skip_whisper_for_video_path()
+    if audio_only:
+        logger.info(
+            "TRIBE video: TRIBE_VIDEO_SKIP_WHISPER set — skipping Whisper/ASR on audio "
+            "(audio_only=True)."
+        )
+
+    event = {
+        "type": "Video",
+        "filepath": str(path.resolve()),
+        "start": 0,
+        "timeline": "default",
+        "subject": "default",
+    }
+    return get_audio_and_text_events(pd.DataFrame([event]), audio_only=audio_only)
+
+
 def predict_from_video(model, video_path: str) -> tuple[np.ndarray, pd.DataFrame]:
-    df = model.get_events_dataframe(video_path=video_path)
+    df = build_video_events_dataframe(video_path)
     preds, segments = model.predict(events=df)
     return preds, segments
 
@@ -135,7 +203,7 @@ def predict_from_video_pooled(
     model, video_path: str, *, verbose: bool = False
 ) -> tuple[np.ndarray, np.ndarray, list]:
     """Run TRIBE on a video file; return mean-pooled ``(n_vertices,)``, raw preds, segments."""
-    df = model.get_events_dataframe(video_path=video_path)
+    df = build_video_events_dataframe(video_path)
     preds, segments = model.predict(events=df, verbose=verbose)
     preds = np.asarray(preds, dtype=np.float32)
     if preds.size == 0:

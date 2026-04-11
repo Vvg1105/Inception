@@ -88,6 +88,8 @@ python -m pipeline.photo_neural_matrix \
   --output /workspace/outputs/photo_tribe_neural.npz
 ```
 
+**Video speed:** this pipeline **defaults to skipping Whisper/ASR** on extracted audio (`TRIBE_VIDEO_SKIP_WHISPER=1`) and **only preparing the video feature extractor** (`TRIBE_FEATURES_VIDEO_ONLY=1`), which avoids loading Llama and Wav2Vec for inference. For the full tribev2 multimodal stack, pass **`--video-whisper`** and **`--tribe-all-modalities`** (or set `TRIBE_VIDEO_SKIP_WHISPER=0` and `TRIBE_FEATURES_VIDEO_ONLY=0` before Python starts).
+
 Adjust `--row-cache-dir` if you want shards on the volume only.
 
 ## CUDA vs CPU behavior

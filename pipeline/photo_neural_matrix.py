@@ -12,6 +12,12 @@ Layout (under ``--dataset-root``, default ``data/photo_dataset``)::
 Writes ``outputs/photo_tribe_neural.npz`` (same bundle keys as ``neural_matrix`` for
 ``train_element_classifier``) and optional row-cache shards for resume.
 
+By default skips **Whisper/ASR** on video audio (``TRIBE_VIDEO_SKIP_WHISPER=1``) for speed;
+pass ``--video-whisper`` to run the full tribev2 word pipeline.
+
+By default loads **video modality only** for TRIBE (``TRIBE_FEATURES_VIDEO_ONLY=1``) so text/audio
+encoders are not prepared; pass ``--tribe-all-modalities`` for full multimodal extractors.
+
 Requires ``ffmpeg`` on PATH.
 """
 
@@ -422,11 +428,31 @@ def main(argv: list[str] | None = None) -> int:
         help="TRIBE tqdm progress",
     )
     p.add_argument(
+        "--video-whisper",
+        action="store_true",
+        help="Run Whisper/transcription on video audio (slow; default skips ASR)",
+    )
+    p.add_argument(
+        "--tribe-all-modalities",
+        action="store_true",
+        help="Prepare text+audio+video TRIBE extractors (heavy VRAM; default video-only)",
+    )
+    p.add_argument(
         "--classes",
         default=",".join(DEFAULT_CLASSES),
         help="Comma-separated class subfolder names under source/",
     )
     args = p.parse_args(argv)
+
+    if args.video_whisper:
+        os.environ["TRIBE_VIDEO_SKIP_WHISPER"] = "0"
+    else:
+        os.environ.setdefault("TRIBE_VIDEO_SKIP_WHISPER", "1")
+
+    if args.tribe_all_modalities:
+        os.environ["TRIBE_FEATURES_VIDEO_ONLY"] = "0"
+    else:
+        os.environ.setdefault("TRIBE_FEATURES_VIDEO_ONLY", "1")
 
     row_cache_dir: Path | None = None
     if not args.no_row_cache:
@@ -468,6 +494,8 @@ def main(argv: list[str] | None = None) -> int:
         "duration_sec": args.duration,
         "fps": args.fps,
         "modality": "photo_video",
+        "TRIBE_VIDEO_SKIP_WHISPER": os.environ.get("TRIBE_VIDEO_SKIP_WHISPER", ""),
+        "TRIBE_FEATURES_VIDEO_ONLY": os.environ.get("TRIBE_FEATURES_VIDEO_ONLY", ""),
     }
     bundle_meta = {
         "size_classes": bundle["size_classes"],

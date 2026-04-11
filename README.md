@@ -11,6 +11,8 @@ TRIBE v2 neural features for **text** and **photo→video** inputs, plus a small
 | Train classifier | `python -m pipeline.train_element_classifier --help` |
 | Classify one phrase | `python -m pipeline.classify_text --help` |
 
+**Photo / video:** by default **no Whisper/ASR** on video audio (`TRIBE_VIDEO_SKIP_WHISPER=1`) and **video-only TRIBE extractors** (`TRIBE_FEATURES_VIDEO_ONLY=1`, skips loading Llama/Wav2Vec for inference). Use **`--video-whisper`** and **`--tribe-all-modalities`** on `photo_neural_matrix` for the full multimodal stack.
+
 - **Local (Mac / CPU):** `pip install -r requirements-tribe.txt`
 - **RunPod / GPU:** [RUNPOD.md](RUNPOD.md) and `requirements-runpod.txt` (do not replace the image’s CUDA PyTorch with CPU wheels)
 - **EMG utilities (separate):** `emg/` — own `requirements.txt`
