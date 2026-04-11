@@ -90,17 +90,41 @@ def generate_bfl_image(
     )
 
 
+def _fast_image_to_mp4(
+    image_path: Path, out_mp4: Path, ffmpeg_exe: str,
+    duration_sec: float = 1.0, fps: int = 4,
+) -> None:
+    """Ultrafast MP4 for real-time classification (not training)."""
+    import subprocess
+
+    out_mp4.parent.mkdir(parents=True, exist_ok=True)
+    vf = f"fps={fps},format=yuv420p,scale=trunc(iw/2)*2:trunc(ih/2)*2"
+    cmd = [
+        ffmpeg_exe, "-hide_banner", "-loglevel", "error", "-y",
+        "-loop", "1", "-i", str(image_path),
+        "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100",
+        "-t", str(duration_sec),
+        "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28",
+        "-vf", vf,
+        "-c:a", "aac", "-shortest",
+        str(out_mp4),
+    ]
+    subprocess.run(cmd, check=True)
+
+
 def classify_from_image_bytes(
     *,
     img_bytes: bytes,
     mime: str,
     duration_sec: float = 5.0,
     fps: int = 24,
+    fast: bool = False,
     cache_folder: str | None = None,
 ) -> tuple[str, str, float, dict[str, float], np.ndarray]:
     """Step 2: image bytes → looped MP4 → TRIBE → classifier.
 
     Returns ``(classified_label, place_key, confidence, probabilities, tribe_pooled)``.
+    When ``fast=True`` uses ultrafast ffmpeg preset with minimal frames (for real-time use).
     """
     from pipeline.photo_neural_matrix import _check_ffmpeg, image_to_looped_mp4
     from tribe.model import predict_from_video_pooled
@@ -117,13 +141,16 @@ def classify_from_image_bytes(
         img_path = tmp / f"gen{ext}"
         img_path.write_bytes(img_bytes)
         mp4_path = tmp / "clip.mp4"
-        image_to_looped_mp4(
-            image_path=img_path,
-            out_mp4=mp4_path,
-            duration_sec=duration_sec,
-            fps=fps,
-            ffmpeg_exe=ffmpeg,
-        )
+        if fast:
+            _fast_image_to_mp4(img_path, mp4_path, ffmpeg, duration_sec, fps)
+        else:
+            image_to_looped_mp4(
+                image_path=img_path,
+                out_mp4=mp4_path,
+                duration_sec=duration_sec,
+                fps=fps,
+                ffmpeg_exe=ffmpeg,
+            )
 
         tribe = _load_tribe(cache_folder)
         pooled, _, _ = predict_from_video_pooled(tribe, str(mp4_path), verbose=False)
@@ -147,6 +174,12 @@ def classify_from_image_bytes(
         return classified, place_key, confidence, probs, pooled_out
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
+
+
+def preload_models(cache_folder: str | None = None) -> None:
+    """Pre-warm TRIBE + classifier so first request doesn't pay load time."""
+    _load_tribe(cache_folder)
+    _load_classifier()
 
 
 def run_vision_classify(

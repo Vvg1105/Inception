@@ -413,6 +413,64 @@ def vision_classify_image(req: VisionClassifyFromImageRequest) -> VisionClassify
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Sketchfab 3D model search (runs in parallel with TRIBE)
+# ═══════════════════════════════════════════════════════════════════════════
+
+_SF_SEARCH = "https://api.sketchfab.com/v3/search"
+_SF_MODELS = "https://api.sketchfab.com/v3/models"
+
+
+def _sketchfab_search_glb(query: str, token: str) -> dict | None:
+    """Search Sketchfab for a downloadable GLB matching *query*.
+
+    Returns ``{"glb_url": ..., "name": ..., "author": ..., "uid": ...}``
+    or ``None`` if nothing found.
+    """
+    import requests
+
+    resp = requests.get(
+        _SF_SEARCH,
+        params={
+            "type": "models",
+            "q": query,
+            "downloadable": "true",
+            "sort_by": "-likeCount",
+            "count": 3,
+        },
+        headers={"Authorization": f"Token {token}"},
+        timeout=10,
+    )
+    if resp.status_code != 200:
+        return None
+    results = resp.json().get("results", [])
+    if not results:
+        return None
+
+    for model in results:
+        uid = model.get("uid")
+        if not uid:
+            continue
+        dl = requests.get(
+            f"{_SF_MODELS}/{uid}/download",
+            headers={"Authorization": f"Token {token}"},
+            timeout=10,
+        )
+        if dl.status_code != 200:
+            continue
+        dl_data = dl.json()
+        glb_info = dl_data.get("glb") or dl_data.get("gltf")
+        if not glb_info or not glb_info.get("url"):
+            continue
+        return {
+            "glb_url": glb_info["url"],
+            "name": model.get("name", query),
+            "author": (model.get("user") or {}).get("displayName", ""),
+            "uid": uid,
+        }
+    return None
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Combined streaming pipeline: BFL → image (streamed) → TRIBE → classify
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -441,11 +499,12 @@ async def vision_pipeline(req: VisionClassifyRequest):
 
     async def _stream():
         loop = asyncio.get_running_loop()
+        prompt_text = req.prompt.strip()
 
         img_bytes, mime = await loop.run_in_executor(
             None,
             lambda: generate_bfl_image(
-                prompt=req.prompt.strip(),
+                prompt=prompt_text,
                 api_key=api_key,
                 bfl_model=bfl_model,
                 width=pipeline_w,
@@ -461,14 +520,12 @@ async def vision_pipeline(req: VisionClassifyRequest):
                 lambda: classify_from_image_bytes(
                     img_bytes=img_bytes,
                     mime=mime,
-                    duration_sec=1.5,
-                    fps=8,
                     cache_folder=os.getenv("TRIBE_CACHE_FOLDER"),
                 ),
             )
             classified, place_key, confidence, probs, tribe_pooled = result
 
-            snippet = req.prompt.strip()[:72]
+            snippet = prompt_text[:72]
             narration = (
                 f"Vision: {classified} ({confidence:.0%})"
                 + (f" — {snippet}" if snippet else "")
@@ -547,14 +604,20 @@ class ModelSearchResponse(BaseModel):
 @app.get("/api/search-model", response_model=ModelSearchResponse)
 def search_model(q: str = Query(..., min_length=1)) -> ModelSearchResponse:
     """
-    Search for downloadable 3D models using Perplexity Sonar.
-    Returns results with direct GLB/GLTF download URLs.
+    Search for downloadable 3D models. Tries Perplexity Sonar first,
+    falls back to Sketchfab API if Perplexity is unavailable.
     """
+    results = _search_perplexity(q)
+    if not results:
+        results = _search_sketchfab_models(q)
+    print(f"[search-model] query={q!r} → {len(results)} result(s)")
+    return ModelSearchResponse(results=results, query=q)
+
+
+def _search_perplexity(q: str) -> list[ModelSearchResult]:
     api_key = _perplexity_api_key()
     if not api_key:
-        print("[search-model] No PERPLEXITY_API_KEY set")
-        return ModelSearchResponse(results=[], query=q)
-
+        return []
     try:
         resp = httpx.post(
             SONAR_URL,
@@ -579,16 +642,13 @@ def search_model(q: str = Query(..., min_length=1)) -> ModelSearchResponse:
         resp.raise_for_status()
         data = resp.json()
     except Exception as exc:
-        print(f"[search-model] Perplexity Sonar request failed: {exc}")
-        return ModelSearchResponse(results=[], query=q)
-
+        print(f"[search-model] Perplexity failed: {exc}")
+        return []
     raw_text = ""
     try:
         raw_text = data["choices"][0]["message"]["content"]
     except (KeyError, IndexError):
-        print(f"[search-model] unexpected response shape: {data}")
-        return ModelSearchResponse(results=[], query=q)
-
+        return []
     parsed = _parse_json_loose(raw_text)
     results: list[ModelSearchResult] = []
     for item in parsed.get("results", []):
@@ -598,11 +658,20 @@ def search_model(q: str = Query(..., min_length=1)) -> ModelSearchResponse:
         if not glb_url:
             continue
         results.append(ModelSearchResult(
-            name=item.get("name", q),
-            glb_url=glb_url,
-            source=item.get("source", ""),
-            author=item.get("author", ""),
+            name=item.get("name", q), glb_url=glb_url,
+            source=item.get("source", ""), author=item.get("author", ""),
         ))
+    return results
 
-    print(f"[search-model] query={q!r} → {len(results)} result(s)")
-    return ModelSearchResponse(results=results, query=q)
+
+def _search_sketchfab_models(q: str) -> list[ModelSearchResult]:
+    sf_token = (os.getenv("SKETCHFAB_API_TOKEN") or "").strip()
+    if not sf_token:
+        return []
+    result = _sketchfab_search_glb(q, sf_token)
+    if not result:
+        return []
+    return [ModelSearchResult(
+        name=result["name"], glb_url=result["glb_url"],
+        source="Sketchfab", author=result.get("author", ""),
+    )]
