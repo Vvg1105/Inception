@@ -395,6 +395,103 @@
       color: #aab;
     }
 
+    /* Brain “activation” popup — anchored to placement point in the scene */
+    #brain-activation-popup {
+      position: fixed;
+      z-index: 251;
+      left: 50%;
+      top: 28%;
+      width: min(220px, 42vw);
+      pointer-events: none;
+      transform: translate(-50%, calc(-100% - 14px));
+      opacity: 0;
+      transition: opacity 0.2s ease;
+    }
+    #brain-activation-popup.brain-on {
+      opacity: 1;
+    }
+    .brain-popup-inner {
+      cursor: default;
+      padding: 10px 12px 12px;
+      border-radius: 10px;
+      border: 1px solid rgba(102, 136, 170, 0.45);
+      background: rgba(255, 255, 255, 0.96);
+      box-shadow: 0 10px 36px rgba(40, 55, 90, 0.2);
+      animation: brainPopupIn 0.3s ease-out;
+    }
+    @keyframes brainPopupIn {
+      from { opacity: 0; transform: translateY(6px) scale(0.96); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .brain-popup-kicker {
+      font-size: 7px;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: #99aabb;
+      margin-bottom: 6px;
+    }
+    .brain-svg {
+      display: block;
+      width: 100%;
+      height: auto;
+      max-height: 118px;
+    }
+    .brain-silhouette {
+      fill: #e8eef6;
+      stroke: rgba(102, 136, 170, 0.55);
+      stroke-width: 1.2;
+    }
+    .brain-region {
+      fill: rgba(102, 136, 170, 0.12);
+      stroke: rgba(102, 136, 170, 0.35);
+      stroke-width: 0.9;
+      transition: fill 0.35s ease, stroke 0.35s ease, filter 0.35s ease;
+    }
+    .brain-region.is-active {
+      fill: url(#brainRegionHotFill);
+      stroke: rgba(60, 90, 140, 0.85);
+      animation: brainRegionPulse 1.25s ease-in-out infinite;
+    }
+    .brain-region.is-active.weak {
+      animation-duration: 1.65s;
+    }
+    @keyframes brainRegionPulse {
+      0%, 100% { opacity: 0.82; filter: drop-shadow(0 0 3px rgba(100, 140, 200, 0.45)); }
+      50% { opacity: 1; filter: drop-shadow(0 0 10px rgba(100, 140, 200, 0.9)); }
+    }
+    .brain-region-chips {
+      list-style: none;
+      margin: 8px 0 0;
+      padding: 0;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px 6px;
+      justify-content: center;
+    }
+    .brain-region-chips li {
+      font-size: 8px;
+      letter-spacing: 0.06em;
+      color: #556677;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: rgba(102, 136, 170, 0.12);
+      border: 1px solid rgba(102, 136, 170, 0.2);
+    }
+    .brain-region-chips li.is-hot {
+      background: rgba(100, 140, 200, 0.22);
+      border-color: rgba(80, 120, 180, 0.45);
+      color: #334455;
+    }
+    .brain-popup-foot {
+      margin-top: 8px;
+      font-size: 6px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #aab;
+      text-align: center;
+      line-height: 1.35;
+    }
+
     /* ── Narration ─────────────────────────────────────────────────────── */
     #narration-text {
       position: fixed; bottom: 160px; left: 50%; transform: translateX(-50%);
@@ -695,6 +792,31 @@
     <div id="neural-pipeline-phase">Imagining…</div>
     <div id="neural-pipeline-prompt"></div>
     <div id="neural-pipeline-hint">synthesizing · encoding · cortical readout</div>
+  </div>
+</div>
+
+<div id="brain-activation-popup" role="img" aria-label="Illustrative brain region activity" hidden>
+  <div class="brain-popup-inner">
+    <div class="brain-popup-kicker">cortical readout · your description</div>
+    <svg class="brain-svg" viewBox="0 0 120 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <defs>
+        <radialGradient id="brainRegionHotFill" cx="35%" cy="35%" r="65%">
+          <stop offset="0%" stop-color="#b8d0f0"/>
+          <stop offset="55%" stop-color="#6a8cc8"/>
+          <stop offset="100%" stop-color="#3d5a88"/>
+        </radialGradient>
+      </defs>
+      <path class="brain-silhouette" d="M14,52 C12,28 32,14 48,17 C54,10 70,10 78,18 C92,16 105,28 106,46 C107,64 96,82 76,88 C58,94 36,90 24,76 C16,66 14,58 14,52 Z"/>
+      <g class="brain-hotspots">
+        <circle class="brain-region" data-region="frontal" cx="38" cy="36" r="11"/>
+        <circle class="brain-region" data-region="parietal" cx="54" cy="30" r="9"/>
+        <circle class="brain-region" data-region="occipital" cx="90" cy="48" r="11"/>
+        <circle class="brain-region" data-region="temporal" cx="60" cy="60" r="12"/>
+        <circle class="brain-region" data-region="limbic" cx="52" cy="46" r="7"/>
+      </g>
+    </svg>
+    <ul class="brain-region-chips" id="brain-region-chips"></ul>
+    <p class="brain-popup-foot">illustrative · from prompt &amp; scene — not clinical imaging</p>
   </div>
 </div>
 
@@ -1418,7 +1540,130 @@ const loaderEl = document.getElementById('loader');
 const neuralOverlay = document.getElementById('neural-pipeline-overlay');
 const neuralPhaseEl = document.getElementById('neural-pipeline-phase');
 const neuralPromptEl = document.getElementById('neural-pipeline-prompt');
+const brainPopupEl = document.getElementById('brain-activation-popup');
+const brainChipsEl = document.getElementById('brain-region-chips');
 let neuralPhaseTimer = null;
+/** @type {THREE.Vector3|null} World anchor for brain popup while vision runs */
+let neuralWorldAnchor = null;
+
+const BRAIN_REGION_LABELS = {
+  occipital: 'Occipital · visual',
+  temporal: 'Temporal · objects & meaning',
+  parietal: 'Parietal · space & scale',
+  frontal: 'Frontal · intent & naming',
+  limbic: 'Limbic · affect',
+};
+
+const BRAIN_LEXICON = {
+  occipital: /\b(red|blue|green|yellow|orange|purple|pink|gold|bright|dark|dim|glow|neon|sky|sun|moon|light|shadow|color|chrome|glass|shiny|matte)\b/i,
+  temporal: /\b(person|people|face|car|truck|bus|train|building|house|tree|dog|cat|bird|sign|door|window|object|thing|bench|tower|bridge)\b/i,
+  parietal: /\b(big|small|tiny|huge|tall|wide|narrow|high|low|near|far|above|below|behind|front|side|corner|center|middle|space|next|between)\b/i,
+  frontal: /\b(place|put|add|make|build|want|need|imagine|think|dream|choose|pick|describe)\b/i,
+  limbic: /\b(happy|sad|love|hate|fear|angry|calm|wild|peace|warm|cold|cozy|lonely|joy|mood|feel)\b/i,
+};
+
+function hashPromptInt32(text) {
+  let h = 2166136261;
+  const s = String(text || '');
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h | 0;
+}
+
+function deriveBrainActivations(promptText) {
+  const p = String(promptText || '').toLowerCase();
+  const h = hashPromptInt32(promptText);
+  const pick = (shift) => ((Math.abs(h) >>> shift) & 7) / 7;
+
+  const arousal = typeof emotion?.arousal === 'number' ? emotion.arousal : 0.5;
+  const valence = typeof emotion?.valence === 'number' ? emotion.valence : 0.5;
+  const limbicFromMood = arousal > 0.62 || valence < 0.35 || valence > 0.65;
+
+  const out = {
+    occipital: { score: 0.92 + pick(0) * 0.08, on: true },
+    temporal: { score: (BRAIN_LEXICON.temporal.test(p) ? 0.78 : 0.35) + pick(4) * 0.22, on: false },
+    parietal: { score: (BRAIN_LEXICON.parietal.test(p) ? 0.72 : 0.32) + pick(8) * 0.2, on: false },
+    frontal: { score: (BRAIN_LEXICON.frontal.test(p) ? 0.75 : 0.45) + pick(12) * 0.25, on: false },
+    limbic: { score: (BRAIN_LEXICON.limbic.test(p) || limbicFromMood ? 0.7 : 0.28) + pick(16) * 0.2, on: false },
+  };
+
+  out.temporal.on = out.temporal.score >= 0.52;
+  out.parietal.on = out.parietal.score >= 0.5;
+  out.frontal.on = out.frontal.score >= 0.48;
+  out.limbic.on = out.limbic.score >= 0.48;
+
+  let onCount = Object.keys(out).filter((k) => out[k].on).length;
+  while (onCount < 3) {
+    const pool = ['temporal', 'parietal', 'frontal', 'limbic'].filter((k) => !out[k].on);
+    if (!pool.length) break;
+    pool.sort((a, b) => out[b].score - out[a].score);
+    const k = pool[0];
+    out[k].on = true;
+    out[k].score = Math.max(out[k].score, 0.55);
+    onCount += 1;
+  }
+
+  return out;
+}
+
+function applyBrainActivationUI(promptText) {
+  if (!brainPopupEl) return;
+  const act = deriveBrainActivations(promptText);
+  brainPopupEl.querySelectorAll('.brain-region[data-region]').forEach((el) => {
+    const key = el.getAttribute('data-region');
+    const a = act[key];
+    el.classList.remove('is-active', 'weak');
+    if (a && a.on) {
+      el.classList.add('is-active');
+      if (a.score < 0.58) el.classList.add('weak');
+    }
+  });
+
+  if (brainChipsEl) {
+    const rows = Object.entries(act)
+      .filter(([, v]) => v.on)
+      .sort((a, b) => b[1].score - a[1].score)
+      .map(([k, v]) => {
+        const cls = v.score >= 0.65 ? ' class="is-hot"' : '';
+        return `<li${cls}>${BRAIN_REGION_LABELS[k] || k}</li>`;
+      });
+    brainChipsEl.innerHTML = rows.join('') || '<li>Occipital · visual</li>';
+  }
+}
+
+function updateBrainPopupScreenPosition() {
+  if (!brainPopupEl || brainPopupEl.hasAttribute('hidden') || !neuralWorldAnchor || !canvas) return;
+
+  const w = neuralWorldAnchor.clone();
+  w.y += 0.5;
+  w.project(camera);
+
+  const rect = canvas.getBoundingClientRect();
+  const onScreen =
+    w.z >= -1 &&
+    w.z <= 1 &&
+    Math.abs(w.x) <= 1.15 &&
+    Math.abs(w.y) <= 1.15;
+
+  let x = rect.left + (w.x * 0.5 + 0.5) * rect.width;
+  let y = rect.top + (-w.y * 0.5 + 0.5) * rect.height;
+
+  if (!onScreen || !Number.isFinite(x) || !Number.isFinite(y)) {
+    x = rect.left + rect.width * 0.5;
+    y = rect.top + rect.height * 0.26;
+  }
+
+  const pad = 16;
+  const estW = Math.min(220, rect.width * 0.42);
+  const estH = 200;
+  x = Math.min(rect.right - pad - estW * 0.5, Math.max(rect.left + pad + estW * 0.5, x));
+  y = Math.min(rect.bottom - pad, Math.max(rect.top + pad + estH, y));
+
+  brainPopupEl.style.left = `${x}px`;
+  brainPopupEl.style.top = `${y}px`;
+}
 
 const NEURAL_PHASE_MESSAGES = [
   'Imagining from your words…',
@@ -1428,8 +1673,9 @@ const NEURAL_PHASE_MESSAGES = [
   'Decoding neural class probabilities…',
 ];
 
-function showNeuralPipelineUI(promptText) {
+function showNeuralPipelineUI(promptText, worldPos) {
   if (!neuralOverlay || !neuralPhaseEl) return;
+  neuralWorldAnchor = worldPos && worldPos.clone ? worldPos.clone() : null;
   if (neuralPromptEl) {
     const s = (promptText || '').trim();
     neuralPromptEl.textContent = s
@@ -1446,6 +1692,13 @@ function showNeuralPipelineUI(promptText) {
   neuralOverlay.classList.add('neural-on');
   neuralOverlay.removeAttribute('hidden');
   neuralOverlay.setAttribute('aria-busy', 'true');
+
+  applyBrainActivationUI(promptText);
+  if (brainPopupEl) {
+    brainPopupEl.classList.add('brain-on');
+    brainPopupEl.removeAttribute('hidden');
+    updateBrainPopupScreenPosition();
+  }
 }
 
 function hideNeuralPipelineUI() {
@@ -1453,10 +1706,15 @@ function hideNeuralPipelineUI() {
     clearInterval(neuralPhaseTimer);
     neuralPhaseTimer = null;
   }
+  neuralWorldAnchor = null;
   if (neuralOverlay) {
     neuralOverlay.classList.remove('neural-on');
     neuralOverlay.setAttribute('hidden', '');
     neuralOverlay.setAttribute('aria-busy', 'false');
+  }
+  if (brainPopupEl) {
+    brainPopupEl.classList.remove('brain-on');
+    brainPopupEl.setAttribute('hidden', '');
   }
 }
 
@@ -1692,7 +1950,7 @@ placeBtn.addEventListener('click', async () => {
 
   const useVision = document.getElementById('vision-place')?.checked ?? false;
   if (useVision && backendOnline) {
-    showNeuralPipelineUI(raw);
+    showNeuralPipelineUI(raw, pos);
     try {
       const ctrl = new AbortController();
       const t = setTimeout(() => ctrl.abort(), 600000);
@@ -3452,6 +3710,8 @@ function animate() {
   ) {
     renderPlacePreviewFrame();
   }
+
+  updateBrainPopupScreenPosition();
 
   composer.render();
 }
