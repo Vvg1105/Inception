@@ -1284,7 +1284,6 @@ function _loadModel(name, position, parsed) {
     root.userData.objectName = name;
     root.userData.parsed     = parsed;
 
-    // Temp natural scale + random rotation
     const tempScale = parsed.size ?? (0.85 + Math.random() * 0.45);
     root.scale.setScalar(tempScale);
     root.position.copy(position);
@@ -1297,7 +1296,6 @@ function _loadModel(name, position, parsed) {
     refreshObjectList();
     loaderEl.style.display = 'none';
 
-    // Fetch LLM material params (async, non-blocking for placement)
     const params = await getLLMMaterials(parsed, { ...emotion });
     applyMaterialParams(root, params);
     applyUserPlaceScale(root, parsed);
@@ -1313,7 +1311,44 @@ function _loadModel(name, position, parsed) {
       (err) => { console.warn(`[DCV] ${file} not found, using fallback.`, err); commit(createFallbackObject(name)); }
     );
   } else {
-    console.info(`[DCV] No mapping for "${key}", using fallback.`);
+    _searchAndLoad(key, name, position, parsed, commit);
+  }
+}
+
+async function _searchAndLoad(key, name, position, parsed, commit) {
+  if (!backendOnline) {
+    console.info(`[DCV] No mapping for "${key}", backend offline — using fallback.`);
+    commit(createFallbackObject(name));
+    return;
+  }
+
+  loaderEl.style.display = 'block';
+  try {
+    const res = await fetch(`${BACKEND}/api/search-model?q=${encodeURIComponent(key)}`, {
+      signal: AbortSignal.timeout(20000),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+
+    const top = (data.results || []).find(r => r.glb_url);
+    if (!top) {
+      console.info(`[DCV] Perplexity found no 3D model for "${key}" — using fallback.`);
+      commit(createFallbackObject(name));
+      return;
+    }
+
+    console.info(`[DCV] Loading 3D model: "${top.name}" from ${top.source || 'web'} (${top.author || 'unknown'})`);
+    gltfLoader.load(
+      top.glb_url,
+      (gltf) => { prepareBaseMaterials(gltf.scene); commit(gltf.scene); },
+      undefined,
+      (err) => {
+        console.warn(`[DCV] GLB load failed for "${top.name}":`, err);
+        commit(createFallbackObject(name));
+      }
+    );
+  } catch (err) {
+    console.warn(`[DCV] Model search failed:`, err);
     commit(createFallbackObject(name));
   }
 }
@@ -1852,7 +1887,7 @@ const weatherCurrent = {
 let activeWeatherLabel  = 'happy';
 let pendingWeatherLabel = 'happy';
 let labelStableAt       = 0;       // timestamp when pending label first appeared
-const LABEL_DEBOUNCE_MS = 1500;    // label must be stable this long to switch
+const LABEL_DEBOUNCE_MS = 800;     // label must be stable this long to switch
 const WEATHER_LERP      = 0.025;   // per-frame blend speed (~2-3s transition)
 
 // ── Rain particle system ─────────────────────────────────────────────────
@@ -3117,8 +3152,8 @@ setTimeout(() => { document.getElementById('hint').style.opacity = '0'; }, 4000)
 function animate() {
   requestAnimationFrame(animate);
 
+  const dt = clock.getDelta();
   const t  = clock.getElapsedTime();
-  const dt = clock.getDelta();          // consumed; keep clock ticking
 
   controls.update();
 

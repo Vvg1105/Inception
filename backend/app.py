@@ -1,9 +1,11 @@
 """
-Dream City Void — placement LLM API
+Dream City Void — placement LLM API + 3D model search
 
 The static site (`index.html`) POSTs here when you place an object. Payload carries
 the typed label, parsed hints, and current emotion pad. This server returns
 `material_params` for Three.js `applyMaterialParams`, plus optional narration.
+
+Also provides `/api/search-model` for finding downloadable 3D models via Sketchfab.
 
 Run:
   cd backend && pip install -r requirements.txt && uvicorn app:app --reload --port 8000
@@ -11,6 +13,7 @@ Run:
 Env:
   ANTHROPIC_API_KEY (or CLAUDE_API_KEY) — Claude API key for `/api/place`
   ANTHROPIC_MODEL     — optional, default claude-3-5-sonnet-20241022
+  PERPLEXITY_API_KEY (or PPLX_API_KEY) — Perplexity Sonar API key for 3D model search
 """
 from __future__ import annotations
 
@@ -20,8 +23,9 @@ import os
 from pathlib import Path
 from typing import Any
 
+import httpx
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -230,3 +234,111 @@ def place(req: PlaceRequest) -> PlaceResponse:
     snippet = (req.base_label or req.label or "something").strip()[:48]
     narration = f"{req.mood or 'still'} — {snippet} settles into the grid."
     return PlaceResponse(material_params=material_params, narration=narration)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 3D model search via Perplexity Sonar
+# ═══════════════════════════════════════════════════════════════════════════
+
+SONAR_URL = "https://api.perplexity.ai/v1/sonar"
+
+SONAR_SYSTEM = """You help find free downloadable 3D models (GLB or GLTF format) on the web.
+When the user asks for a 3D model of something, search the web and return ONLY a JSON object with this exact shape:
+{
+  "results": [
+    {
+      "name": "Model name",
+      "glb_url": "https://direct-download-link-to.glb",
+      "source": "website name",
+      "author": "creator name"
+    }
+  ]
+}
+
+Rules:
+- Only include models with DIRECT download links to .glb or .gltf files (not page links).
+- Look on sites like Sketchfab, Poly Pizza, KennyNL, Quaternius, poly.pizza, Smithsonian 3D, NASA 3D, market.pmnd.rs, etc.
+- Prefer free, Creative Commons licensed models.
+- Return 1-3 results maximum.
+- If you cannot find any direct GLB/GLTF download links, return {"results": []}.
+- Output ONLY valid JSON, no markdown fences, no explanation."""
+
+
+def _perplexity_api_key() -> str | None:
+    return os.getenv("PERPLEXITY_API_KEY") or os.getenv("PPLX_API_KEY")
+
+
+class ModelSearchResult(BaseModel):
+    name: str
+    glb_url: str = ""
+    source: str = ""
+    author: str = ""
+
+
+class ModelSearchResponse(BaseModel):
+    results: list[ModelSearchResult]
+    query: str
+
+
+@app.get("/api/search-model", response_model=ModelSearchResponse)
+def search_model(q: str = Query(..., min_length=1)) -> ModelSearchResponse:
+    """
+    Search for downloadable 3D models using Perplexity Sonar.
+    Returns results with direct GLB/GLTF download URLs.
+    """
+    api_key = _perplexity_api_key()
+    if not api_key:
+        print("[search-model] No PERPLEXITY_API_KEY set")
+        return ModelSearchResponse(results=[], query=q)
+
+    try:
+        resp = httpx.post(
+            SONAR_URL,
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": "sonar",
+                "messages": [
+                    {"role": "system", "content": SONAR_SYSTEM},
+                    {
+                        "role": "user",
+                        "content": f"Find a free downloadable 3D model (GLB/GLTF) of: {q}",
+                    },
+                ],
+                "temperature": 0.1,
+                "max_tokens": 1024,
+            },
+            timeout=15.0,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+    except Exception as exc:
+        print(f"[search-model] Perplexity Sonar request failed: {exc}")
+        return ModelSearchResponse(results=[], query=q)
+
+    raw_text = ""
+    try:
+        raw_text = data["choices"][0]["message"]["content"]
+    except (KeyError, IndexError):
+        print(f"[search-model] unexpected response shape: {data}")
+        return ModelSearchResponse(results=[], query=q)
+
+    parsed = _parse_json_loose(raw_text)
+    results: list[ModelSearchResult] = []
+    for item in parsed.get("results", []):
+        if not isinstance(item, dict):
+            continue
+        glb_url = item.get("glb_url", "")
+        if not glb_url:
+            continue
+        results.append(ModelSearchResult(
+            name=item.get("name", q),
+            glb_url=glb_url,
+            source=item.get("source", ""),
+            author=item.get("author", ""),
+        ))
+
+    print(f"[search-model] query={q!r} → {len(results)} result(s)")
+    return ModelSearchResponse(results=results, query=q)
