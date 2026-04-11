@@ -675,3 +675,21 @@ def _search_sketchfab_models(q: str) -> list[ModelSearchResult]:
         name=result["name"], glb_url=result["glb_url"],
         source="Sketchfab", author=result.get("author", ""),
     )]
+
+
+@app.get("/api/proxy-glb")
+async def proxy_glb(url: str = Query(...)):
+    """Proxy a GLB download to avoid browser CORS issues."""
+    import requests
+    try:
+        r = requests.get(url, timeout=60, stream=True)
+        if r.status_code != 200:
+            raise HTTPException(status_code=r.status_code, detail="Upstream download failed")
+        content_type = r.headers.get("Content-Type", "model/gltf-binary")
+        return StreamingResponse(
+            r.iter_content(chunk_size=65536),
+            media_type=content_type,
+            headers={"Content-Disposition": "inline"},
+        )
+    except requests.RequestException as exc:
+        raise HTTPException(status_code=502, detail=str(exc))

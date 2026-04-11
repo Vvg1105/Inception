@@ -1988,8 +1988,9 @@ async function _searchAndLoad(key, name, position, parsed, commit) {
     }
 
     console.info(`[DCV] Loading 3D model: "${top.name}" from ${top.source || 'web'} (${top.author || 'unknown'})`);
+    const glbUrl = `${BACKEND}/api/proxy-glb?url=${encodeURIComponent(top.glb_url)}`;
     gltfLoader.load(
-      top.glb_url,
+      glbUrl,
       (gltf) => { prepareBaseMaterials(gltf.scene); commit(gltf.scene); },
       undefined,
       (err) => {
@@ -2230,7 +2231,7 @@ placeBtn.addEventListener('click', async () => {
   closePopup();
 
   const useVision = document.getElementById('vision-place')?.checked ?? false;
-  if (useVision) {
+  if (useVision || isTribeClass(raw)) {
     await runVisionPipeline(raw, pos, parsed);
   } else {
     placeObject(raw, pos, parsed);
@@ -3256,8 +3257,9 @@ document.getElementById('gaze-sens')?.addEventListener('input', function () {
     listening = false;
     micBtn.classList.remove('listening');
     micBtn.textContent = '🎤 speak';
-    if (recognition) { try { recognition.abort(); } catch {} }
+    const r = recognition;
     recognition = null;
+    if (r) { try { r.abort(); } catch {} }
   }
 
   function pickGroundPosition() {
@@ -3303,12 +3305,14 @@ document.getElementById('gaze-sens')?.addEventListener('input', function () {
     };
 
     recognition.onerror = (event) => {
+      if (!recognition) return;
       console.warn('[Voice] error:', event.error);
       stopListening();
       if (statusEl) statusEl.textContent = event.error === 'no-speech' ? 'no speech heard' : `error: ${event.error}`;
     };
 
     recognition.onend = () => {
+      if (!recognition) return;
       if (listening) stopListening();
     };
 
