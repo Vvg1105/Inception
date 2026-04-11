@@ -13,6 +13,8 @@ TRIBE v2 neural features for **text** and **photo→video** inputs, plus a small
 
 **Photo / video:** by default **no Whisper/ASR** on video audio (`TRIBE_VIDEO_SKIP_WHISPER=1`) and **video-only TRIBE extractors** (`TRIBE_FEATURES_VIDEO_ONLY=1`, skips loading Llama/Wav2Vec for inference). Use **`--video-whisper`** and **`--tribe-all-modalities`** on `photo_neural_matrix` for the full multimodal stack.
 
+**Photos on GitHub → RunPod:** commit/push images under `data/photo_dataset/source/<class>/`, then on the pod `cd` to the repo and `git pull`. Run `python -m pipeline.photo_neural_matrix ...` (see `--help`). To hold out **K** images per class for testing only, add **`--holdout-per-class K`**; training uses **`--output`**; the holdout matrix defaults to `<output_stem>_holdout.npz` — **train the classifier only on `--output`**, not on the holdout file.
+
 - **Local (Mac / CPU):** `pip install -r requirements-tribe.txt`
 - **RunPod / GPU:** [RUNPOD.md](RUNPOD.md) and `requirements-runpod.txt` (do not replace the image’s CUDA PyTorch with CPU wheels)
 - **EMG utilities (separate):** `emg/` — own `requirements.txt`

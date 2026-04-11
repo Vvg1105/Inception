@@ -17,6 +17,10 @@ By default, if ``--output`` already exists, **merges** with it: rows for images 
 and rows for files you removed from disk are **kept**. Pass ``--no-merge-output`` to build
 only from the current tree (replace the matrix).
 
+Use ``--holdout-per-class K`` (with ``--holdout-seed``) to randomly reserve **K** images per
+class for ``--holdout-output`` (evaluation only). The main ``--output`` matrix contains the
+rest — use it for ``train_element_classifier``; **do not** train on the holdout file.
+
 By default skips **Whisper/ASR** on video audio (``TRIBE_VIDEO_SKIP_WHISPER=1``) for speed;
 pass ``--video-whisper`` to run the full tribev2 word pipeline.
 
@@ -32,6 +36,7 @@ import argparse
 import hashlib
 import json
 import logging
+import random
 import os
 import shutil
 import subprocess
@@ -254,6 +259,42 @@ def iter_photo_samples(
     return deduped
 
 
+def split_holdout_per_class(
+    samples: list[tuple[str, Path, str, str]],
+    holdout_per_class: int,
+    seed: int,
+) -> tuple[list[tuple[str, Path, str, str]], list[tuple[str, Path, str, str]]]:
+    """Random but reproducible split: ``holdout_per_class`` samples per label → hold list."""
+    if holdout_per_class <= 0:
+        return samples, []
+
+    from collections import defaultdict
+
+    by_label: dict[str, list[tuple[str, Path, str, str]]] = defaultdict(list)
+    for t in samples:
+        by_label[t[0]].append(t)
+
+    train: list[tuple[str, Path, str, str]] = []
+    hold: list[tuple[str, Path, str, str]] = []
+    for label in sorted(by_label.keys()):
+        lst = sorted(by_label[label], key=lambda x: x[2])
+        if len(lst) <= holdout_per_class:
+            raise RuntimeError(
+                f"class {label!r}: need more than {holdout_per_class} images (have {len(lst)}) "
+                "to reserve holdout and keep at least one training image per class"
+            )
+        h = int(hashlib.sha256(f"{seed}\0{label}".encode()).hexdigest()[:15], 16)
+        rng = random.Random(h)
+        shuffled = lst.copy()
+        rng.shuffle(shuffled)
+        hold.extend(shuffled[:holdout_per_class])
+        train.extend(shuffled[holdout_per_class:])
+
+    train.sort(key=lambda t: (t[0], t[2]))
+    hold.sort(key=lambda t: (t[0], t[2]))
+    return train, hold
+
+
 def build_photo_neural_bundle(
     *,
     dataset_root: Path,
@@ -270,15 +311,20 @@ def build_photo_neural_bundle(
     class_names: tuple[str, ...] | None,
     merge_output_path: Path | None,
     merge_output: bool,
+    samples: list[tuple[str, Path, str, str]] | None = None,
+    drop_merge_keys: set[str] | None = None,
 ) -> dict:
     ffmpeg_exe = _check_ffmpeg()
-    samples = iter_photo_samples(
-        dataset_root=dataset_root,
-        source_subdir=source_subdir,
-        class_names=class_names,
-    )
-    if limit is not None:
-        samples = samples[:limit]
+    if samples is None:
+        samples = iter_photo_samples(
+            dataset_root=dataset_root,
+            source_subdir=source_subdir,
+            class_names=class_names,
+        )
+        if limit is not None:
+            samples = samples[:limit]
+    else:
+        samples = list(samples)
     if not samples and not (
         merge_output and merge_output_path is not None and merge_output_path.is_file()
     ):
@@ -298,6 +344,9 @@ def build_photo_neural_bundle(
                 merge_output_path,
                 nv0,
             )
+    if drop_merge_keys:
+        for k in drop_merge_keys:
+            merged_rows.pop(k, None)
 
     use_cache = row_cache_dir is not None
     if use_cache:
@@ -552,6 +601,26 @@ def main(argv: list[str] | None = None) -> int:
         default=",".join(DEFAULT_CLASSES),
         help="Comma-separated class subfolder names under source/",
     )
+    p.add_argument(
+        "--holdout-per-class",
+        type=int,
+        default=0,
+        metavar="K",
+        help="Randomly reserve K images per class for --holdout-output (not for training); "
+        "requires >K images per class",
+    )
+    p.add_argument(
+        "--holdout-output",
+        type=Path,
+        default=None,
+        help="Holdout .npz path (default: <output_stem>_holdout.npz next to --output)",
+    )
+    p.add_argument(
+        "--holdout-seed",
+        type=int,
+        default=42,
+        help="RNG seed for holdout selection (per-class derived seed)",
+    )
     args = p.parse_args(argv)
 
     if args.video_whisper:
@@ -578,7 +647,43 @@ def main(argv: list[str] | None = None) -> int:
     if not class_tuple:
         class_tuple = DEFAULT_CLASSES
 
+    holdout_n = max(0, int(args.holdout_per_class))
+    holdout_path: Path | None = None
+    if holdout_n > 0:
+        holdout_path = (
+            args.holdout_output
+            if args.holdout_output is not None
+            else args.output.parent / f"{args.output.stem}_holdout{args.output.suffix}"
+        )
+
     try:
+        all_samples = iter_photo_samples(
+            dataset_root=args.dataset_root.resolve(),
+            source_subdir=args.source_subdir,
+            class_names=class_tuple,
+        )
+        if args.limit is not None:
+            all_samples = all_samples[: args.limit]
+
+        if holdout_n > 0:
+            train_samples, hold_samples = split_holdout_per_class(
+                all_samples, holdout_n, args.holdout_seed
+            )
+            hold_keys = {t[3] for t in hold_samples}
+            train_keys = {t[3] for t in train_samples}
+            logger.info(
+                "Holdout split: %d train rows, %d holdout rows (K=%d per class, seed=%d)",
+                len(train_samples),
+                len(hold_samples),
+                holdout_n,
+                args.holdout_seed,
+            )
+        else:
+            train_samples = all_samples
+            hold_samples = []
+            hold_keys = set()
+            train_keys = set()
+
         bundle = build_photo_neural_bundle(
             dataset_root=args.dataset_root.resolve(),
             source_subdir=args.source_subdir,
@@ -590,34 +695,60 @@ def main(argv: list[str] | None = None) -> int:
             duration_sec=args.duration,
             fps=args.fps,
             verbose_tribe=args.verbose_tribe,
-            limit=args.limit,
+            limit=None,
             class_names=class_tuple,
             merge_output_path=args.output.resolve(),
             merge_output=not args.no_merge_output,
+            samples=train_samples,
+            drop_merge_keys=hold_keys if hold_keys else None,
         )
+
+        bundle_hold = None
+        if holdout_n > 0 and holdout_path is not None:
+            bundle_hold = build_photo_neural_bundle(
+                dataset_root=args.dataset_root.resolve(),
+                source_subdir=args.source_subdir,
+                generated_subdir=args.generated_subdir,
+                cache_folder=args.cache_folder,
+                row_cache_dir=row_cache_dir,
+                force_recompute=args.force_recompute,
+                force_reencode=args.force_reencode,
+                duration_sec=args.duration,
+                fps=args.fps,
+                verbose_tribe=args.verbose_tribe,
+                limit=None,
+                class_names=class_tuple,
+                merge_output_path=holdout_path.resolve(),
+                merge_output=not args.no_merge_output,
+                samples=hold_samples,
+                drop_merge_keys=train_keys if train_keys else None,
+            )
     except (RuntimeError, FileNotFoundError, subprocess.CalledProcessError) as e:
         logger.error("%s", e)
         return 1
 
-    meta_extra = {
-        "dataset_root": str(args.dataset_root.resolve()),
-        "source_subdir": args.source_subdir,
-        "generated_subdir": args.generated_subdir,
-        "duration_sec": args.duration,
-        "fps": args.fps,
-        "modality": "photo_video",
-        "TRIBE_VIDEO_SKIP_WHISPER": os.environ.get("TRIBE_VIDEO_SKIP_WHISPER", ""),
-        "TRIBE_FEATURES_VIDEO_ONLY": os.environ.get("TRIBE_FEATURES_VIDEO_ONLY", ""),
-        "merge_output": not args.no_merge_output,
-    }
-    bundle_meta = {
-        "size_classes": bundle["size_classes"],
-        "element_classes": bundle["element_classes"],
-        "n_vertices": bundle["n_vertices"],
-        "photo_pipeline": meta_extra,
-    }
+    def meta_for(split: str) -> dict:
+        m = {
+            "dataset_root": str(args.dataset_root.resolve()),
+            "source_subdir": args.source_subdir,
+            "generated_subdir": args.generated_subdir,
+            "duration_sec": args.duration,
+            "fps": args.fps,
+            "modality": "photo_video",
+            "TRIBE_VIDEO_SKIP_WHISPER": os.environ.get("TRIBE_VIDEO_SKIP_WHISPER", ""),
+            "TRIBE_FEATURES_VIDEO_ONLY": os.environ.get("TRIBE_FEATURES_VIDEO_ONLY", ""),
+            "merge_output": not args.no_merge_output,
+            "split": split,
+        }
+        if holdout_n > 0:
+            m["holdout_per_class"] = holdout_n
+            m["holdout_seed"] = args.holdout_seed
+            m["holdout_output"] = str(holdout_path.resolve()) if holdout_path else ""
+        return m
+
     path = args.output
     path.parent.mkdir(parents=True, exist_ok=True)
+    train_meta = meta_for("train")
     np.savez_compressed(
         path,
         X=bundle["X"],
@@ -626,9 +757,40 @@ def main(argv: list[str] | None = None) -> int:
         texts=bundle["texts"],
         labels_combined=bundle["labels_combined"],
         n_segments_per_sentence=bundle["n_segments_per_sentence"],
-        meta_json=json.dumps(bundle_meta),
+        meta_json=json.dumps(
+            {
+                "size_classes": bundle["size_classes"],
+                "element_classes": bundle["element_classes"],
+                "n_vertices": bundle["n_vertices"],
+                "photo_pipeline": train_meta,
+            }
+        ),
     )
     logger.info("Wrote %s (X shape %s)", path, bundle["X"].shape)
+
+    if bundle_hold is not None and holdout_path is not None:
+        ho = holdout_path.resolve()
+        ho.parent.mkdir(parents=True, exist_ok=True)
+        hold_meta = meta_for("holdout")
+        np.savez_compressed(
+            ho,
+            X=bundle_hold["X"],
+            y_size=bundle_hold["y_size"],
+            y_element=bundle_hold["y_element"],
+            texts=bundle_hold["texts"],
+            labels_combined=bundle_hold["labels_combined"],
+            n_segments_per_sentence=bundle_hold["n_segments_per_sentence"],
+            meta_json=json.dumps(
+                {
+                    "size_classes": bundle_hold["size_classes"],
+                    "element_classes": bundle_hold["element_classes"],
+                    "n_vertices": bundle_hold["n_vertices"],
+                    "photo_pipeline": hold_meta,
+                }
+            ),
+        )
+        logger.info("Wrote holdout %s (X shape %s)", ho, bundle_hold["X"].shape)
+
     return 0
 
 
