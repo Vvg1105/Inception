@@ -138,8 +138,8 @@
       letter-spacing: 0.04em;
     }
     #popup-label {
-      font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase;
-      color: #aaa; margin-bottom: 10px;
+      font-size: 13px; letter-spacing: 0.04em;
+      color: #556; margin-bottom: 14px;
     }
     #objectInput {
       width: 100%; background: transparent; border: none;
@@ -653,52 +653,22 @@
 
 <!-- Placement popup -->
 <div id="popup">
-  <div id="popup-label">place object</div>
-  <div class="popup-tabs" role="tablist">
-    <button type="button" class="popup-tab active" data-panel="search" role="tab" aria-selected="true">search</button>
-    <button type="button" class="popup-tab" data-panel="preview" role="tab" aria-selected="false">preview</button>
-  </div>
+  <div id="popup-label">What are you imagining?</div>
   <div id="popup-panel-search">
     <div id="object-input-wrap">
       <input type="text" id="objectInput"
-             placeholder="type po… → pond · Tab completes"
+             placeholder="describe anything…"
              autocomplete="off" spellcheck="false">
       <div id="object-suggest" role="listbox" aria-label="name matches"></div>
     </div>
     <datalist id="place-object-datalist"></datalist>
-    <div id="parse-preview"></div>
-    <div id="popup-scale-row">
-      <label>scale</label>
-      <input type="range" class="wp-slider" id="place-scale" min="0.15" max="3.5" step="0.05" value="1" style="flex:1">
-      <span id="v-place-scale" style="font-size:8px;color:#888;width:36px;text-align:right">1.00×</span>
-    </div>
-    <div id="popup-hint">
-      civic: stadium · arena · plaza · garden · playground · park<br>
-      commercial: building a–n · skyscraper a–e · wide building · mall<br>
-      industrial: industrial a–t · factory · chimney · tank<br>
-      suburban: suburban a–u · house · tree · fence · path long · driveway long<br>
-      roads: road · bend · curve · crossroad · roundabout · bridge<br>
-      nature: river · pond · lake · hill · cloud<br>
-      scale: slider multiplies placement size (stacks with words like massive / tiny). Click a placed object to resize it.<br>
-      prefix any name: <em>red massive glowing bridge</em>
-    </div>
-    <div id="tint-row">
-      <span id="tint-label">tint</span>
-      <input type="color" id="obj-color" value="#ffffff">
-      <span id="tint-reset">no tint</span>
-    </div>
-    <div id="popup-buttons" style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;">
-      <label id="vision-place-label" style="font-size:9px;color:#aaa;display:flex;align-items:center;gap:5px;cursor:pointer;user-select:none;">
-        <input type="checkbox" id="vision-place" checked>
-        vision (BFL→TRIBE→class)
-      </label>
-      <button id="placeBtn">place</button>
+    <div id="parse-preview" style="display:none"></div>
+    <input type="hidden" id="obj-color" value="#ffffff">
+    <input type="checkbox" id="vision-place" checked style="display:none">
+    <div id="popup-buttons" style="display:flex;align-items:center;gap:8px;margin-top:14px;">
+      <button id="placeBtn">imagine</button>
       <button id="cancelBtn">cancel</button>
     </div>
-  </div>
-  <div id="popup-panel-preview" style="display:none;" role="tabpanel">
-    <canvas id="place-preview-canvas" width="264" height="160"></canvas>
-    <p id="place-preview-status">Enter a name in <strong>search</strong> — preview updates here (GLB spins slowly).</p>
   </div>
 </div>
 
@@ -3014,7 +2984,7 @@ document.getElementById('fog-slider').addEventListener('input', () => {
 });
 
 // Tint reset
-document.getElementById('tint-reset').addEventListener('click', () => {
+document.getElementById('tint-reset')?.addEventListener('click', () => {
   document.getElementById('obj-color').value = '#ffffff';
 });
 
