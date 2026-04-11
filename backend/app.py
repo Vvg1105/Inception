@@ -521,9 +521,6 @@ async def vision_pipeline(req: VisionClassifyRequest):
             lambda: classify_from_image_bytes(
                 img_bytes=img_bytes,
                 mime=mime,
-                duration_sec=1.0,
-                fps=4,
-                fast=True,
                 cache_folder=os.getenv("TRIBE_CACHE_FOLDER"),
             ),
         ))
