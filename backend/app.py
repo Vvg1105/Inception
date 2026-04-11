@@ -14,20 +14,31 @@ Env:
   ANTHROPIC_API_KEY (or CLAUDE_API_KEY) — Claude API key for `/api/place`
   ANTHROPIC_MODEL     — optional, default claude-3-5-sonnet-20241022
   PERPLEXITY_API_KEY (or PPLX_API_KEY) — Perplexity Sonar API key for 3D model search
+  BFL_API_KEY — Black Forest Labs FLUX API for ``/api/vision-classify`` (same as pipeline.bfl_tribe_classify)
+  BFL_MODEL — optional FLUX endpoint name (default flux-2-klein-4b)
+
+``/api/vision-classify`` also needs TRIBE + the photo classifier joblib in the **same** venv
+(``pip install -r ../requirements-tribe.txt`` from repo root, or use your RunPod venv).
 """
 from __future__ import annotations
 
 import hashlib
 import json
 import os
+import sys
 from pathlib import Path
 from typing import Any
 
 import httpx
 from dotenv import load_dotenv
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+
+# pipeline/, tribe/, etc. live at repo root (parent of backend/)
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 
 # Repo root .env (run `uvicorn` from `backend/` or project root)
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
@@ -68,6 +79,23 @@ class PlaceResponse(BaseModel):
     material_params: dict[str, Any]
     narration: str | None = None
     audio_b64: str | None = None
+
+
+class VisionClassifyRequest(BaseModel):
+    """Prompt for BFL → TRIBE → element classifier (matches client emotion payload)."""
+
+    prompt: str
+    emotion: Emotion = Field(default_factory=Emotion)
+    mood: str = ""
+    environment: dict[str, Any] = Field(default_factory=dict)
+
+
+class VisionClassifyResponse(BaseModel):
+    classified_label: str
+    place_key: str
+    confidence: float
+    probabilities: dict[str, float]
+    narration: str
 
 
 # ── Local heuristic (same idea as `buildLocalParams` in index.html) ──────────
@@ -234,6 +262,51 @@ def place(req: PlaceRequest) -> PlaceResponse:
     snippet = (req.base_label or req.label or "something").strip()[:48]
     narration = f"{req.mood or 'still'} — {snippet} settles into the grid."
     return PlaceResponse(material_params=material_params, narration=narration)
+
+
+@app.post("/api/vision-classify", response_model=VisionClassifyResponse)
+def vision_classify(req: VisionClassifyRequest) -> VisionClassifyResponse:
+    """
+    Text prompt → BFL image → looped MP4 → TRIBE video features → sklearn class.
+    Returns ``place_key`` for ``index.html`` MODEL_MAP / PROCEDURAL_MAP.
+    """
+    api_key = (os.getenv("BFL_API_KEY") or "").strip()
+    if not api_key:
+        raise HTTPException(
+            status_code=503,
+            detail="BFL_API_KEY not set (repo root or backend .env)",
+        )
+    try:
+        from vision_place import run_vision_classify
+    except ImportError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Vision stack import failed (install tribev2/torch in this venv): {exc}",
+        ) from exc
+
+    try:
+        classified, place_key, confidence, probs = run_vision_classify(
+            prompt=req.prompt.strip(),
+            api_key=api_key,
+            bfl_model=os.getenv("BFL_MODEL", "flux-2-klein-4b"),
+            cache_folder=os.getenv("TRIBE_CACHE_FOLDER"),
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    snippet = req.prompt.strip()[:72]
+    narration = f"Vision: {classified} ({confidence:.0%}) — {snippet}"
+    return VisionClassifyResponse(
+        classified_label=classified,
+        place_key=place_key,
+        confidence=confidence,
+        probabilities=probs,
+        narration=narration,
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════════════

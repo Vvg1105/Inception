@@ -40,6 +40,14 @@ python eeg_decode.py                 # real hardware (edit EEGDecoder subclass)
 
 Open **http://localhost:8080/index.html**. The page calls **http://localhost:8000** — keep both running. Console should show `[Backend] online`.
 
+### Vision placement (BFL → TRIBE → classifier)
+
+With **`BFL_API_KEY`** set and **TRIBE + classifier** installed in the **same** venv as the API
+(e.g. `pip install -r ../requirements-tribe.txt` from repo root, then your classifier at
+`outputs/photo_element_logreg.joblib`), the place popup checkbox **vision (BFL→TRIBE→class)**
+calls **`POST /api/vision-classify`**. The returned class sets which asset is spawned
+(bridge, lake, skyscraper, tree, house, …). First request loads TRIBE (slow). Needs **ffmpeg** on `PATH`.
+
 ### What happens when you place
 
 1. **Blink** (with "open build after blink") or **click the ground** → place dialog opens.  

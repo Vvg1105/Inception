@@ -500,7 +500,11 @@
       <input type="color" id="obj-color" value="#ffffff">
       <span id="tint-reset">no tint</span>
     </div>
-    <div id="popup-buttons">
+    <div id="popup-buttons" style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;">
+      <label id="vision-place-label" style="font-size:9px;color:#aaa;display:flex;align-items:center;gap:5px;cursor:pointer;user-select:none;">
+        <input type="checkbox" id="vision-place" checked>
+        vision (BFL→TRIBE→class)
+      </label>
       <button id="placeBtn">place</button>
       <button id="cancelBtn">cancel</button>
     </div>
@@ -1471,18 +1475,61 @@ function closePopup() {
   if (typeof closePlacePreview === 'function') closePlacePreview();
 }
 
-placeBtn.addEventListener('click', () => {
+placeBtn.addEventListener('click', async () => {
   const raw = objectInput.value.trim();
-  if (raw && pendingPos) {
-    clearPlacedSelection();
-    const parsed = parseLabel(raw);
-    const pickerColor = document.getElementById('obj-color').value;
-    if (pickerColor !== '#ffffff') parsed.color = pickerColor;
-    const ps = document.getElementById('place-scale');
-    parsed.userScale = ps ? parseFloat(ps.value) : 1;
-    placeObject(raw, pendingPos.clone(), parsed);
-  }
+  if (!raw || !pendingPos) return;
+
+  clearPlacedSelection();
+  let parsed = parseLabel(raw);
+  const pickerColor = document.getElementById('obj-color').value;
+  if (pickerColor !== '#ffffff') parsed.color = pickerColor;
+  const ps = document.getElementById('place-scale');
+  parsed.userScale = ps ? parseFloat(ps.value) : 1;
+  const pos = pendingPos.clone();
+
   closePopup();
+
+  const useVision = document.getElementById('vision-place')?.checked ?? false;
+  if (useVision && backendOnline) {
+    loaderEl.style.display = 'block';
+    try {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 600000);
+      const res = await fetch(`${BACKEND}/api/vision-classify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: raw,
+          emotion: { ...emotion },
+          mood: document.getElementById('mood-state').textContent,
+          environment: {
+            mood_quadrant: getMoodKey(),
+            sun_elevation_deg: skyParams.elevation,
+            sun_azimuth_deg: skyParams.azimuth,
+            sky_turbidity: skyParams.turbidity,
+            fog_density: parseFloat(document.getElementById('fog-slider')?.value ?? '0.3'),
+          },
+        }),
+        signal: ctrl.signal,
+      });
+      clearTimeout(t);
+      if (res.ok) {
+        const v = await res.json();
+        parsed.base = v.place_key;
+        if (v.narration) showNarration(v.narration);
+        placeObject(`${v.classified_label}: ${raw}`, pos, parsed);
+        return;
+      }
+      const errBody = await res.text();
+      console.warn('[Vision] HTTP', res.status, errBody);
+    } catch (e) {
+      console.warn('[Vision] failed, using text parse only', e);
+    } finally {
+      loaderEl.style.display = 'none';
+    }
+  }
+
+  placeObject(raw, pos, parsed);
 });
 
 cancelBtn.addEventListener('click', closePopup);
