@@ -1,81 +1,81 @@
 text,label
-"A cozy little coffee shop on the corner.",small building
-"The tiny brick house sits behind a hedge.",small building
-"A modest one-story clinic beside the park.",small building
-"The compact bakery only has two tables inside.",small building
-"A small apartment block with just four units.",small building
-"A huge municipal hall dominates the square.",big building
-"The enormous hospital stretches a full city block.",big building
-"A vast office complex with glass towers.",big building
-"The massive convention center hosts thousands.",big building
-"An immense apartment building with thirty floors.",big building
-"A slender mini-tower, only a dozen stories.",small skyscraper
-"The city’s shortest high-rise looks modest downtown.",small skyscraper
-"A petite glass tower compared to its neighbors.",small skyscraper
-"A compact skyscraper housing a single company.",small skyscraper
-"The smallest skyscraper on the skyline.",small skyscraper
-"A colossal tower pierces the clouds.",big skyscraper
-"The gigantic needle-like building is the tallest here.",big skyscraper
-"A massive supertall dominates the financial district.",big skyscraper
-"An enormous skyscraper with over a hundred floors.",big skyscraper
-"The immense spire is visible from miles away.",big skyscraper
-"A narrow footbridge crosses the creek.",small bridge
-"The little stone arch is only for pedestrians.",small bridge
-"A tiny wooden bridge over a garden canal.",small bridge
-"A short span connecting two rooftops.",small bridge
-"The smallest crossing—just wide enough for bikes.",small bridge
-"A huge suspension bridge spans the entire bay.",big bridge
-"The enormous steel bridge carries six lanes of traffic.",big bridge
-"A massive cable-stayed link between two cities.",big bridge
-"The vast bridge disappears into the fog.",big bridge
-"An immense river crossing built for heavy trucks.",big bridge
-"A quiet narrow lane between old houses.",small street
-"The tiny cul-de-sac has only three homes.",small street
-"A short cobblestone alley near the market.",small street
-"A cramped side street barely one car wide.",small street
-"The little dead-end road ends at a garden wall.",small street
-"A wide boulevard lined with plane trees.",big street
-"The enormous avenue runs straight through downtown.",big street
-"A massive eight-lane road packed with rush-hour traffic.",big street
-"The grand thoroughfare hosts the city’s parades.",big street
-"A vast highway cutting across the urban grid.",big street
-"A young sapling planted last spring.",small tree
-"The little ornamental cherry in a planter.",small tree
-"A dwarf citrus tree on the sidewalk.",small tree
-"A tiny bonsai-like pine by the steps.",small tree
-"The small shrubby tree hasn’t reached the roofline yet.",small tree
-"A towering oak shades half the block.",big tree
-"The enormous ancient elm in the plaza.",big tree
-"A massive redwood rising above the rooftops.",big tree
-"The immense chestnut spreads a huge canopy.",big tree
-"A gigantic fig tree whose roots lift the pavement.",big tree
-"A narrow brook trickling through the park.",small river
-"The shallow stream is barely knee-deep.",small river
-"A little urban creek between two warehouses.",small river
-"A thin ribbon of water in a concrete channel.",small river
-"The smallest branch of the delta here.",small river
-"A wide river carries barges and ferries.",big river
-"The enormous waterway splits the city in two.",big river
-"A massive brown river swollen after the rains.",big river
-"The vast river mouth opens to the sea.",big river
-"An immense current too deep to ford.",big river
-"A faint porch bulb above the door.",small light
-"The dim little sconce in the stairwell.",small light
-"A tiny LED pinprick on the kiosk.",small light
-"A soft night-light along the garden path.",small light
-"The smallest lamp—just a candle glow behind glass.",small light
-"Blinding stadium floodlights over the field.",big light
-"The enormous searchlight sweeps the harbor.",big light
-"Massive tower beacons on the bridge pylons.",big light
-"Huge billboards lighting up the whole block.",big light
-"An intense arc of stadium lamps visible from afar.",big light
-"A modest workshop with a single smokestack.",small factory
-"The tiny plant assembles parts in one bay.",small factory
-"A compact micro-factory behind a storefront.",small factory
-"The little textile mill is family-run.",small factory
-"A small industrial unit in a business park.",small factory
-"A sprawling plant covers acres along the tracks.",big factory
-"The enormous refinery glows at night.",big factory
-"A massive assembly hall the size of several fields.",big factory
-"The vast steel mill churns out beams around the clock.",big factory
-"An immense chemical complex with endless pipes and tanks.",big factory
+"coffee shop building",small building
+"corner store building",small building
+"dentist office building",small building
+"two story house",small building
+"bank branch building",small building
+"mini mart building",small building
+"one story clinic",small building
+"row house",small building
+"office above a store",small building
+"five floor apartment building",small building
+"glass office tower",skyscraper
+"tall building downtown",skyscraper
+"high rise apartments",skyscraper
+"skyscraper under construction",skyscraper
+"big tower in the skyline",skyscraper
+"tech company tower",skyscraper
+"tower with antenna on top",skyscraper
+"hotel and office tower",skyscraper
+"old high rise from the seventies",skyscraper
+"tallest building in the district",skyscraper
+"highway bridge over water",big bridge
+"suspension bridge",big bridge
+"six lane bridge",big bridge
+"train bridge",big bridge
+"bridge between two cities",big bridge
+"bridge for trucks",big bridge
+"arch bridge",big bridge
+"bridge over the shipping lane",big bridge
+"stone bridge",big bridge
+"long bridge over the bay",big bridge
+"oak tree",tree
+"maple tree",tree
+"pine tree",tree
+"old tree",tree
+"tree in the park",tree
+"apple tree in the yard",tree
+"tree on the sidewalk",tree
+"tree by the fence",tree
+"dead tree",tree
+"young tree",tree
+"creek",river
+"stream",river
+"urban canal",river
+"drainage ditch with water",river
+"brook between fields",river
+"almost dry stream",river
+"poured concrete channel with water",river
+"side branch of a river",river
+"irrigation ditch",river
+"water running through the park",river
+"street light on a pole",street light
+"LED street light",street light
+"sodium street light",street light
+"solar street light",street light
+"the street light does not work",street light
+"new street lights with sensors",street light
+"lights at the intersection",street light
+"alley street light",street light
+"highway ramp light",street light
+"downtown street lights",street light
+"quiet side street",street
+"one way street",street
+"steep hill street",street
+"dead end street",street
+"brick street",street
+"wide street with bike lane",street
+"warehouse street",street
+"main street with stores",street
+"cross street",street
+"no cars street",street
+"dog park",park
+"playground park",park
+"city park with paths",park
+"skating park with ramps",park
+"trail park entrance",park
+"tiny park between buildings",park
+"park with a pond",park
+"soccer field park",park
+"roof park",park
+"community park on a lot",park

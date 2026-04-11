@@ -1,4 +1,4 @@
-"""CSV sentences → TRIBE neural preds → matrix ``X`` + size/element labels. See ``--help``."""
+"""CSV sentences → TRIBE neural preds → matrix ``X`` + class labels. See ``--help``."""
 
 from __future__ import annotations
 
@@ -22,16 +22,12 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 ROW_CACHE_VERSION = 1
 
 
-def parse_city_label(combined: str) -> tuple[str, str]:
-    """Split ``\"small building\"`` into (\"small\", \"building\")."""
+def normalize_class_label(combined: str) -> str:
+    """Normalize the CSV ``label`` column to one class string (e.g. ``park``, ``street light``)."""
     s = (combined or "").strip().lower()
     if not s:
         raise ValueError("empty label")
-    parts = s.split(None, 1)
-    if len(parts) < 2:
-        raise ValueError(f"expected '<size> <element>', got: {combined!r}")
-    size, element = parts[0], parts[1]
-    return size, element
+    return s
 
 
 def labels_to_indices(
@@ -46,6 +42,88 @@ def labels_to_indices(
 
 def _row_shard_path(row_cache_dir: Path, index: int) -> Path:
     return row_cache_dir / f"{index:05d}.npz"
+
+
+def build_bundle_from_row_cache(
+    csv_path: Path,
+    row_cache_dir: Path,
+    *,
+    limit: int | None = None,
+) -> dict:
+    """Stack neural vectors from ``{row_cache_dir}/{i:05d}.npz`` + labels from *csv_path*.
+
+    Only rows with a valid, text-matching shard are included (order preserved by CSV index).
+    Use this to train or evaluate while :func:`build_neural_matrix` is still running.
+    """
+    df = pd.read_csv(csv_path)
+    if "text" not in df.columns or "label" not in df.columns:
+        raise ValueError("CSV must have columns: text, label")
+    rows = df.dropna(subset=["text", "label"])
+    if limit is not None:
+        rows = rows.head(limit)
+
+    texts = rows["text"].astype(str).tolist()
+    raw_labels = rows["label"].astype(str).tolist()
+    row_cache_dir = row_cache_dir.resolve()
+
+    pooled_list: list[np.ndarray] = []
+    kept_labels: list[str] = []
+    kept_texts: list[str] = []
+    n_seg_list: list[int] = []
+    row_indices: list[int] = []
+    expected_nv: int | None = None
+
+    for i, text in enumerate(texts):
+        shard = _row_shard_path(row_cache_dir, i)
+        if not shard.is_file():
+            continue
+        hit = _load_row_shard(
+            shard,
+            expected_text=text,
+            expected_n_vertices=expected_nv,
+        )
+        if hit is None:
+            continue
+        pooled, n_seg = hit
+        if expected_nv is None:
+            expected_nv = int(pooled.shape[0])
+        elif pooled.shape[0] != expected_nv:
+            logger.warning("Skipping row %d: pooled dim mismatch", i)
+            continue
+        pooled_list.append(pooled)
+        kept_labels.append(raw_labels[i])
+        kept_texts.append(text)
+        n_seg_list.append(n_seg)
+        row_indices.append(i)
+
+    if not pooled_list:
+        raise RuntimeError(
+            f"No usable row-cache shards under {row_cache_dir}. "
+            "Wait for pipeline.neural_matrix to write at least one .npz shard."
+        )
+
+    sizes = []
+    elements = []
+    for lab in kept_labels:
+        elements.append(normalize_class_label(lab))
+        sizes.append("na")
+
+    X = np.stack(pooled_list, axis=0).astype(np.float32, copy=False)
+    y_size, size_classes = labels_to_indices(sizes)
+    y_element, element_classes = labels_to_indices(elements)
+
+    return {
+        "X": X,
+        "y_size": y_size,
+        "y_element": y_element,
+        "size_classes": size_classes,
+        "element_classes": element_classes,
+        "texts": np.array(kept_texts, dtype=object),
+        "labels_combined": np.array(kept_labels, dtype=object),
+        "n_segments_per_sentence": np.array(n_seg_list, dtype=np.int64),
+        "n_vertices": int(X.shape[1]),
+        "row_indices": np.array(row_indices, dtype=np.int64),
+    }
 
 
 def _load_row_shard(
@@ -143,9 +221,8 @@ def build_neural_matrix(
     sizes: list[str] = []
     elements: list[str] = []
     for lab in raw_labels:
-        sz, el = parse_city_label(lab)
-        sizes.append(sz)
-        elements.append(el)
+        elements.append(normalize_class_label(lab))
+        sizes.append("na")
 
     use_cache = row_cache_dir is not None
     if use_cache:

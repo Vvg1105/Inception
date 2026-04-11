@@ -1,11 +1,19 @@
 # imagine
 
-TRIBE-based neural feature pipeline for the city-elements sentence dataset.
+TRIBE v2 neural features for **text** and **photo→video** inputs, plus a small **sklearn** classifier on top.
 
 - **Inception / LLM placement API (FastAPI):** see [backend/README.md](backend/README.md) — `uvicorn app:app --port 8000` so `index.html` can POST emotion + object label and receive `material_params`.
 
-- **Local:** `pip install -r requirements-tribe.txt` then `python -m pipeline.neural_matrix --help`
-- **RunPod / GPU:** see [RUNPOD.md](RUNPOD.md)
+| Piece | Command |
+|--------|---------|
+| Text CSV → matrix | `python -m pipeline.neural_matrix --help` |
+| Photos → MP4 → matrix | `python -m pipeline.photo_neural_matrix --help` |
+| Train classifier | `python -m pipeline.train_element_classifier --help` |
+| Classify one phrase | `python -m pipeline.classify_text --help` |
+
+- **Local (Mac / CPU):** `pip install -r requirements-tribe.txt`
+- **RunPod / GPU:** [RUNPOD.md](RUNPOD.md) and `requirements-runpod.txt` (do not replace the image’s CUDA PyTorch with CPU wheels)
+- **EMG utilities (separate):** `emg/` — own `requirements.txt`
 
 WhisperX is patched via `tribe/whisper_patch.py`: **float16 on CUDA**, **float32 on CPU**.
 

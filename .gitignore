@@ -14,9 +14,18 @@ build/
 !.env.example
 
 .DS_Store
+.AppleDouble
+Thumbs.db
 .idea/
 .vscode/
 *.swp
+
+# Type checkers / linters
+.mypy_cache/
+.ruff_cache/
+
+# Cursor / local tooling (if present in repo root)
+.cursor/
 
 # TRIBE / HF / uv caches (large)
 cache/
@@ -27,6 +36,9 @@ hf_cache/
 outputs/
 **/*_row_cache/
 
+# Still-image → TRIBE: regenerated MP4s (large)
+data/photo_dataset/generated_videos/
+
 # Jupyter
 .ipynb_checkpoints/
 
@@ -36,3 +48,8 @@ htmlcov/
 
 # MediaPipe model (downloaded at runtime)
 *.task
+
+# Keys / secrets (never commit)
+*.pem
+id_rsa
+id_ed25519
