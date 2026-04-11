@@ -448,6 +448,26 @@
       color: #aab;
     }
 
+    /* ── Voice / mic button ───────────────────────────────────────────── */
+    #voice-mic-btn {
+      font-family: inherit; font-size: 9px; letter-spacing: 0.14em;
+      text-transform: uppercase; color: #668; background: rgba(80,80,160,0.07);
+      border: 1px solid #aac; border-radius: 3px; padding: 4px 10px;
+      cursor: pointer; transition: all 0.15s; white-space: nowrap;
+    }
+    #voice-mic-btn:hover { background: rgba(80,80,160,0.14); }
+    #voice-mic-btn.listening {
+      color: #c44; border-color: #c44; background: rgba(200,60,60,0.08);
+      animation: micPulse 1.2s ease infinite;
+    }
+    @keyframes micPulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(200,60,60,0); }
+      50% { box-shadow: 0 0 8px 2px rgba(200,60,60,0.3); }
+    }
+    #voice-status {
+      font-size: 7px; color: #999; white-space: nowrap;
+    }
+
     /* ── Narration ─────────────────────────────────────────────────────── */
     #narration-text {
       position: fixed; bottom: 160px; left: 50%; transform: translateX(-50%);
@@ -631,6 +651,13 @@
           <button type="button" class="eye-gaze-btn" id="eeg-disconnect" disabled>disconnect</button>
         </div>
         <span id="eeg-status" style="font-size:7px;color:#999;white-space:nowrap">off</span>
+      </div>
+    </div>
+    <div class="wp-row" style="align-items:center">
+      <label>Voice</label>
+      <div style="flex:1;display:flex;align-items:center;gap:6px">
+        <button type="button" id="voice-mic-btn">🎤 speak</button>
+        <span id="voice-status">off</span>
       </div>
     </div>
   </div>
@@ -1891,6 +1918,88 @@ function closePopup() {
   if (typeof closePlacePreview === 'function') closePlacePreview();
 }
 
+async function runVisionPipeline(prompt, pos, parsed) {
+  if (!backendOnline) {
+    placeObject(prompt, pos, parsed);
+    return;
+  }
+  showNeuralPipelineUI(prompt);
+  const visionPayload = {
+    prompt,
+    emotion: { ...emotion },
+    mood: document.getElementById('mood-state').textContent,
+    environment: {
+      mood_quadrant: getMoodKey(),
+      sun_elevation_deg: skyParams.elevation,
+      sun_azimuth_deg: skyParams.azimuth,
+      sky_turbidity: skyParams.turbidity,
+      fog_density: parseFloat(document.getElementById('fog-slider')?.value ?? '0.3'),
+    },
+  };
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 600000);
+
+    const res = await fetch(`${BACKEND}/api/vision-pipeline`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(visionPayload),
+      signal: ctrl.signal,
+    });
+    if (!res.ok) {
+      console.warn('[Vision/pipeline] HTTP', res.status);
+      clearTimeout(t);
+      hideNeuralPipelineUI();
+      placeObject(prompt, pos, parsed);
+      return;
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+    let placed = false;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop();
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const msg = JSON.parse(line);
+          if (msg.stage === 'image') {
+            showImaginedImage(msg.image_b64, msg.mime);
+          } else if (msg.stage === 'classified') {
+            clearTimeout(t);
+            parsed.base = msg.place_key;
+            hideNeuralPipelineUI();
+            showTribeBrainFromVision(msg);
+            if (msg.narration) showNarration(msg.narration);
+            placeObject(`${msg.classified_label}: ${prompt}`, pos, parsed);
+            placed = true;
+          } else if (msg.stage === 'error') {
+            console.warn('[Vision/pipeline] error stage:', msg.detail);
+          }
+        } catch (parseErr) {
+          console.warn('[Vision/pipeline] NDJSON parse error:', parseErr);
+        }
+      }
+    }
+    clearTimeout(t);
+    if (!placed) {
+      hideNeuralPipelineUI();
+      placeObject(prompt, pos, parsed);
+    }
+    return;
+  } catch (e) {
+    console.warn('[Vision] pipeline failed, using text parse only', e);
+  }
+  hideNeuralPipelineUI();
+  placeObject(prompt, pos, parsed);
+}
+
 placeBtn.addEventListener('click', async () => {
   const raw = objectInput.value.trim();
   if (!raw || !pendingPos) return;
@@ -1906,73 +2015,11 @@ placeBtn.addEventListener('click', async () => {
   closePopup();
 
   const useVision = document.getElementById('vision-place')?.checked ?? false;
-  if (useVision && backendOnline) {
-    showNeuralPipelineUI(raw);
-    const visionPayload = {
-      prompt: raw,
-      emotion: { ...emotion },
-      mood: document.getElementById('mood-state').textContent,
-      environment: {
-        mood_quadrant: getMoodKey(),
-        sun_elevation_deg: skyParams.elevation,
-        sun_azimuth_deg: skyParams.azimuth,
-        sky_turbidity: skyParams.turbidity,
-        fog_density: parseFloat(document.getElementById('fog-slider')?.value ?? '0.3'),
-      },
-    };
-    try {
-      const ctrl = new AbortController();
-      const t = setTimeout(() => ctrl.abort(), 600000);
-
-      /* Step 1 — generate BFL image (fast) and display it in the popup */
-      const imgRes = await fetch(`${BACKEND}/api/vision-imagine`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(visionPayload),
-        signal: ctrl.signal,
-      });
-      if (!imgRes.ok) {
-        const errBody = await imgRes.text();
-        console.warn('[Vision/imagine] HTTP', imgRes.status, errBody);
-        clearTimeout(t);
-        hideNeuralPipelineUI();
-        placeObject(raw, pos, parsed);
-        return;
-      }
-      const imgJson = await imgRes.json();
-      showImaginedImage(imgJson.image_b64, imgJson.mime);
-
-      /* Step 2 — TRIBE + classifier (slower) using the image we already have */
-      const classRes = await fetch(`${BACKEND}/api/vision-classify-image`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          image_b64: imgJson.image_b64,
-          mime: imgJson.mime,
-          prompt: raw,
-        }),
-        signal: ctrl.signal,
-      });
-      clearTimeout(t);
-      if (classRes.ok) {
-        const v = await classRes.json();
-        parsed.base = v.place_key;
-        hideNeuralPipelineUI();
-        showTribeBrainFromVision(v);
-        if (v.narration) showNarration(v.narration);
-        placeObject(`${v.classified_label}: ${raw}`, pos, parsed);
-        return;
-      }
-      const errBody = await classRes.text();
-      console.warn('[Vision/classify-image] HTTP', classRes.status, errBody);
-    } catch (e) {
-      console.warn('[Vision] failed, using text parse only', e);
-    } finally {
-      hideNeuralPipelineUI();
-    }
+  if (useVision) {
+    await runVisionPipeline(raw, pos, parsed);
+  } else {
+    placeObject(raw, pos, parsed);
   }
-
-  placeObject(raw, pos, parsed);
 });
 
 cancelBtn.addEventListener('click', closePopup);
@@ -2963,6 +3010,88 @@ document.getElementById('gaze-sens')?.addEventListener('input', function () {
   });
 
   setEegUi(false);
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Voice input — Speech → BFL → TRIBE → place
+// ═══════════════════════════════════════════════════════════════════════════
+(function wireVoiceInput() {
+  const micBtn = document.getElementById('voice-mic-btn');
+  const statusEl = document.getElementById('voice-status');
+  if (!micBtn) return;
+
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    micBtn.disabled = true;
+    if (statusEl) statusEl.textContent = 'not supported';
+    return;
+  }
+
+  let recognition = null;
+  let listening = false;
+
+  function stopListening() {
+    listening = false;
+    micBtn.classList.remove('listening');
+    micBtn.textContent = '🎤 speak';
+    if (recognition) { try { recognition.abort(); } catch {} }
+    recognition = null;
+  }
+
+  function pickGroundPosition() {
+    const blend = getBlendedNdc();
+    const rc = new THREE.Raycaster();
+    rc.setFromCamera(blend, camera);
+    let hits = rc.intersectObject(ground, false);
+    if (hits.length === 0) {
+      rc.setFromCamera(new THREE.Vector2(0, 0), camera);
+      hits = rc.intersectObject(ground, false);
+    }
+    return hits.length > 0 ? hits[0].point.clone() : null;
+  }
+
+  micBtn.addEventListener('click', () => {
+    if (listening) { stopListening(); if (statusEl) statusEl.textContent = 'cancelled'; return; }
+
+    recognition = new SpeechRecognition();
+    recognition.lang = 'en-US';
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    listening = true;
+    micBtn.classList.add('listening');
+    micBtn.textContent = '⏹ stop';
+    if (statusEl) statusEl.textContent = 'listening…';
+
+    recognition.onresult = async (event) => {
+      const transcript = event.results[0][0].transcript.trim();
+      stopListening();
+      if (!transcript) { if (statusEl) statusEl.textContent = 'no speech detected'; return; }
+
+      if (statusEl) statusEl.textContent = `"${transcript}"`;
+      console.info('[Voice] transcript:', transcript);
+      showNarration(`imagining: "${transcript}"`);
+
+      const pos = pickGroundPosition();
+      if (!pos) { if (statusEl) statusEl.textContent = 'no ground hit'; return; }
+
+      const parsed = parseLabel(transcript);
+      await runVisionPipeline(transcript, pos, parsed);
+      if (statusEl) statusEl.textContent = 'placed';
+    };
+
+    recognition.onerror = (event) => {
+      console.warn('[Voice] error:', event.error);
+      stopListening();
+      if (statusEl) statusEl.textContent = event.error === 'no-speech' ? 'no speech heard' : `error: ${event.error}`;
+    };
+
+    recognition.onend = () => {
+      if (listening) stopListening();
+    };
+
+    recognition.start();
+  });
 })();
 
 // Ground colour

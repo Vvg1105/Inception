@@ -58,6 +58,22 @@ app.add_middleware(
 )
 
 
+@app.on_event("startup")
+async def _preload_tribe():
+    """Pre-warm TRIBE + classifier in a background thread so first request is fast."""
+    if os.getenv("TRIBE_PRELOAD", "1").strip().lower() in ("1", "true", "yes"):
+        try:
+            from vision_place import preload_models
+
+            loop = asyncio.get_running_loop()
+            loop.run_in_executor(
+                None,
+                lambda: preload_models(os.getenv("TRIBE_CACHE_FOLDER")),
+            )
+        except Exception as exc:
+            print(f"[startup] TRIBE preload skipped: {exc}")
+
+
 # ── Request / response shapes (match `getLLMMaterials` in index.html) ─────────
 
 
@@ -461,8 +477,9 @@ async def vision_pipeline(req: VisionClassifyRequest):
                 lambda: classify_from_image_bytes(
                     img_bytes=img_bytes,
                     mime=mime,
-                    duration_sec=1.5,
-                    fps=8,
+                    duration_sec=1.0,
+                    fps=4,
+                    fast=True,
                     cache_folder=os.getenv("TRIBE_CACHE_FOLDER"),
                 ),
             )
