@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import collections
 import json
 import math
 import os
@@ -70,10 +71,8 @@ class EEGDecoder:
 MOCK_EMOTIONS = [
     {"label": "happy", "arousal": 0.70, "valence": 0.85, "focus": 0.75},
     {"label": "sad",   "arousal": 0.25, "valence": 0.20, "focus": 0.40},
-    {"label": "angry", "arousal": 0.85, "valence": 0.15, "focus": 0.60},
-    {"label": "fear",  "arousal": 0.80, "valence": 0.20, "focus": 0.35},
 ]
-MOCK_HOLD_SECONDS = 10  # hold each emotion for this long before switching
+MOCK_HOLD_SECONDS = 3   # hold each emotion for this long before switching
 
 
 class MockDecoder(EEGDecoder):
@@ -120,11 +119,13 @@ class MockDecoder(EEGDecoder):
 # Emotion label → (arousal, valence) in the circumplex model.
 # Focus is derived from confidence: high confidence → high focus.
 EMOTION_AV = {
-    "angry": (0.85, 0.15),
-    "fear":  (0.80, 0.20),
     "happy": (0.70, 0.85),
     "sad":   (0.25, 0.20),
 }
+
+
+EMOTION_INTERVAL_S  = 0.5   # call decode_emotion() every 500 ms
+EMOTION_HISTORY_N   = 6     # average last 6 results = 3 s
 
 
 class LiveDecoder(EEGDecoder):
@@ -132,8 +133,8 @@ class LiveDecoder(EEGDecoder):
     Real EEG decoder using the gpype pipeline and eeg/eeg_stream.py.
 
     Pipeline: BCICore8 → Bandpass(0.5–45) → Notch 50 → Notch 60 → EEGBuffer
-    Blink:    check_blink_state() — threshold on mean absolute amplitude
-    Emotion:  decode_emotion() — EEGNet inference on the last 100 ms
+    Blink:    check_blink_state() — polled every tick; triggers on rising edge
+    Emotion:  decode_emotion() — called every 500 ms, averaged over last 3 s
     """
 
     def __init__(self) -> None:
@@ -141,12 +142,15 @@ class LiveDecoder(EEGDecoder):
         self._last_arousal = 0.5
         self._last_valence = 0.5
         self._last_focus   = 0.5
-        self._last_label   = "happy"
+        self._last_label   = ""
+        # History stores raw per-class probability dicts for smoothing.
+        self._prob_history: collections.deque = collections.deque(maxlen=EMOTION_HISTORY_N)
+        self._next_emotion_t = 0.0  # monotonic time for next decode_emotion() call
 
     def setup(self) -> None:
         import torch
         import gpype as gp
-        from eeg.eegnet import EEGNet
+        from eeg.eegnet import EEGNet, EmotionMLP
         from eeg.eeg_stream import EEGBuffer, load_emotion_model
 
         p        = gp.Pipeline()
@@ -171,7 +175,8 @@ class LiveDecoder(EEGDecoder):
             "mps" if torch.backends.mps.is_available() else
             "cuda" if torch.cuda.is_available() else "cpu"
         )
-        model = EEGNet(
+        model_cls = EmotionMLP if cfg.get("model", "eegnet") == "mlp" else EEGNet
+        model = model_cls(
             n_channels=cfg["n_channels"],
             n_timepoints=cfg["n_timepoints"],
             n_classes=cfg["n_classes"],
@@ -180,7 +185,32 @@ class LiveDecoder(EEGDecoder):
         model.eval()
         load_emotion_model(model, cfg)
 
-        p.start()
+        max_attempts = 4
+        for attempt in range(1, max_attempts + 1):
+            try:
+                p.start()
+                break
+            except (ValueError, RuntimeError, OSError) as exc:
+                print(f"  BLE connect attempt {attempt}/{max_attempts} failed: {exc}")
+                if attempt == max_attempts:
+                    raise RuntimeError(
+                        "Could not connect to BCI Core-8 after "
+                        f"{max_attempts} attempts. Power-cycle the headset "
+                        "and toggle Bluetooth, then retry."
+                    ) from exc
+                time.sleep(3)
+                # Rebuild the pipeline — a failed start leaves nodes in a bad state.
+                p        = gp.Pipeline()
+                source   = gp.BCICore8()
+                bandpass = gp.Bandpass(f_lo=0.5, f_hi=45)
+                notch50  = gp.Bandstop(f_lo=48,  f_hi=52)
+                notch60  = gp.Bandstop(f_lo=58,  f_hi=62)
+                buf      = EEGBuffer()
+                p.connect(source,   bandpass)
+                p.connect(bandpass, notch50)
+                p.connect(notch50,  notch60)
+                p.connect(notch60,  buf)
+
         self._pipeline = p
         print("  gpype pipeline started")
 
@@ -188,18 +218,34 @@ class LiveDecoder(EEGDecoder):
         return None
 
     def decode(self, raw: Any) -> dict[str, Any]:
-        from eeg.eeg_stream import check_blink_state, decode_emotion
+        from eeg.eeg_stream import check_blink_state_old, decode_emotion
 
-        blink = check_blink_state()
+        blink = check_blink_state_old()
 
-        result = decode_emotion()
-        if result is not None:
-            label, confidence = result
-            av = EMOTION_AV.get(label, (0.5, 0.5))
+        # Only call decode_emotion() every 500 ms to avoid over-sampling.
+        now = time.monotonic()
+        if now >= self._next_emotion_t:
+            self._next_emotion_t = now + EMOTION_INTERVAL_S
+            result = decode_emotion()
+            if result is not None:
+                *_, probs = result
+                self._prob_history.append(probs)
+
+        # Smooth by averaging raw per-class probabilities over the history window.
+        # This is more stable than majority-voting labels — a slight consistent
+        # lean in probability space accumulates rather than being rounded away.
+        if self._prob_history:
+            emotions = list(next(iter(self._prob_history)).keys())
+            n = len(self._prob_history)
+            avg_probs = {e: sum(p[e] for p in self._prob_history) / n
+                         for e in emotions}
+            best = max(avg_probs, key=avg_probs.__getitem__)
+            confidence = avg_probs[best]
+            av = EMOTION_AV.get(best, (0.5, 0.5))
+            self._last_label   = best
+            self._last_focus   = confidence
             self._last_arousal = av[0] * confidence + 0.5 * (1 - confidence)
             self._last_valence = av[1] * confidence + 0.5 * (1 - confidence)
-            self._last_focus   = confidence
-            self._last_label   = label
 
         return {
             "arousal": self._last_arousal,
@@ -225,11 +271,11 @@ clients: set[Any] = set()
 
 def build_message(state: dict[str, Any], prev_blink: bool) -> tuple[str, bool]:
     """
-    Build JSON to send. If blink just ended (True → False), add capture flag
-    so the browser opens the place UI.
+    Build JSON to send. If blink just started (False → True), add capture flag
+    so the browser opens the place UI immediately — no waiting for blink to end.
     """
     blink_now = bool(state.get("blink"))
-    capture = prev_blink and not blink_now
+    capture = not prev_blink and blink_now  # rising edge: fire on first detection
 
     msg: dict[str, Any] = {
         "present": True,
@@ -291,11 +337,50 @@ async def main(decoder: EEGDecoder, port: int) -> None:
     print("Connect in World panel → EEG → connect")
     print()
 
+    loop = asyncio.get_running_loop()
+    stop = loop.create_future()
+
+    # Register SIGINT/SIGTERM so Ctrl-C resolves the future instead of raising
+    # into the middle of the event loop (which leaves the port open).
+    import signal as _signal
+    for sig in (_signal.SIGINT, _signal.SIGTERM):
+        loop.add_signal_handler(sig, stop.set_result, None)
+
     async with websockets.serve(ws_handler, "127.0.0.1", port):
+        decode_task = asyncio.ensure_future(decode_loop(decoder))
         try:
-            await decode_loop(decoder)
+            # Block until Ctrl-C / SIGTERM fires the stop future.
+            await asyncio.wait(
+                [decode_task, asyncio.ensure_future(stop)],
+                return_when=asyncio.FIRST_COMPLETED,
+            )
         finally:
+            decode_task.cancel()
+            try:
+                await decode_task
+            except asyncio.CancelledError:
+                pass
             decoder.cleanup()
+            print("\nStopped.")
+
+
+def free_port(port: int) -> None:
+    """Kill any process already bound to `port` so we can reuse it."""
+    import signal
+    import subprocess
+    result = subprocess.run(
+        ["lsof", "-ti", f"tcp:{port}"],
+        capture_output=True, text=True
+    )
+    pids = [p for p in result.stdout.strip().split() if p]
+    for pid in pids:
+        try:
+            os.kill(int(pid), signal.SIGKILL)
+            print(f"Killed stale process {pid} on port {port}")
+        except (ProcessLookupError, ValueError):
+            pass
+    if pids:
+        time.sleep(1.0)   # give the OS time to release the port after SIGKILL
 
 
 if __name__ == "__main__":
@@ -307,6 +392,8 @@ if __name__ == "__main__":
         help="Use fake sine-wave decoder (no hardware needed)",
     )
     args = parser.parse_args()
+
+    free_port(args.port)
 
     decoder: EEGDecoder
     if args.mock:

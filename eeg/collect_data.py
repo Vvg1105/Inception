@@ -19,15 +19,19 @@ import time
 
 import numpy as np
 import gpype as gp
+import gtec_ble as ble
 
 from gpype.backend.core.i_node import INode
 from gpype.common.constants import Constants
 
 # ── Configuration ─────────────────────────────────────────────────────────────
-EMOTIONS     = ["angry", "sad", "happy", "fear"]
-RECORD_SECS  = 10
+EMOTIONS     = ["sad", "happy"]
+N_TRIALS     = 3       # trials per emotion — more trials = more onset events = better model
+TRIAL_SECS   = 7       # seconds per trial — short enough that emotion stays strong throughout
+REST_SECS    = 4       # rest between trials (not recorded, just a break)
 FS           = 250
 DATA_DIR     = os.path.join(os.path.dirname(__file__), "data")
+REST_LABEL   = len(EMOTIONS)   # sentinel label (2) used to mark trial boundaries in the array
 
 PORT_IN = Constants.Defaults.PORT_IN
 
@@ -48,8 +52,14 @@ class EEGRecorder(INode):
         self._current_label = -1
         self._samples: list = []
         self._labels: list  = []
+        self._total_received: int = 0   # all samples ever seen, recording or not
 
     # ── Called from main thread ───────────────────────────────────────────────
+    def is_flowing(self) -> bool:
+        """Return True once the pipeline has delivered at least one sample."""
+        with self._lock:
+            return self._total_received > 0
+
     def start_recording(self, label: int):
         with self._lock:
             self._current_label = label
@@ -66,11 +76,16 @@ class EEGRecorder(INode):
 
     # ── Called from pipeline thread ───────────────────────────────────────────
     def step(self, data: dict) -> None:
+        # data[PORT_IN] shape: (frame_size, n_channels)
+        # frame_size may be > 1 depending on BCICore8 buffer config, so
+        # iterate all rows rather than taking only [0].
+        frame = data[PORT_IN]
         with self._lock:
+            self._total_received += len(frame)
             if self._recording:
-                # data[PORT_IN] shape: (1, n_channels) — one sample at a time
-                self._samples.append(data[PORT_IN][0].copy())
-                self._labels.append(self._current_label)
+                for sample in frame:
+                    self._samples.append(sample.copy())
+                    self._labels.append(self._current_label)
         return None
 
 
@@ -105,7 +120,7 @@ def main():
 
     print("=" * 60)
     print("  EEG Emotion Data Collection")
-    print(f"  {len(EMOTIONS)} emotions × {RECORD_SECS}s  @  {FS} Hz  ×  8 channels")
+    print(f"  {len(EMOTIONS)} emotions × {N_TRIALS} trials × {TRIAL_SECS}s  @  {FS} Hz  ×  8 channels")
     print("=" * 60)
 
     # ── Build gpype pipeline ──────────────────────────────────────────────────
@@ -122,23 +137,59 @@ def main():
     p.connect(notch50,  notch60)
     p.connect(notch60,  recorder)
 
+    # ── Verify BCI Core-8 is reachable before starting the pipeline ──────────
+    # Amplifier.__init__ scans BLE for ~6 s and throws ValueError if nothing is
+    # found.  That exception is swallowed inside gpype's thread, leaving the
+    # pipeline "Healthy" with 0 samples forever.  Scan here first so we get a
+    # clear error message before wasting time.
+    import gtec_ble as ble
+    print("\nScanning for BCI Core-8 (up to 6 s) ...")
+    devices = ble.Amplifier.get_connected_devices()
+    if not devices:
+        print("  ERROR: No BCI Core-8 found over BLE.")
+        print("  → Power on the headset and make sure Bluetooth is enabled.")
+        return
+    print(f"  Found device(s): {devices}")
+
     # ── Start pipeline (runs in background threads) ───────────────────────────
-    print("\nConnecting to BCI Core-8 ...")
+    print("Starting pipeline ...")
     p.start()
-    time.sleep(2)   # let amplifier settle
+
+    # Wait until the first sample actually arrives at the recorder.
+    CONNECT_TIMEOUT_S = 15
+    print("  Waiting for data flow", end="", flush=True)
+    deadline = time.time() + CONNECT_TIMEOUT_S
+    while not recorder.is_flowing():
+        if time.time() > deadline:
+            print(f"\n  ERROR: Pipeline started but no samples received after "
+                  f"{CONNECT_TIMEOUT_S}s — check BLE connection.")
+            p.stop()
+            return
+        print(".", end="", flush=True)
+        time.sleep(0.5)
+    print(f"  flowing ({recorder._total_received} samples received)")
+    time.sleep(1)   # brief extra settle time
 
     # ── Recording loop ────────────────────────────────────────────────────────
+    # Each emotion gets N_TRIALS short bursts.  Short trials keep the emotion
+    # signal strong (emotion fades after ~10-12 s of sustained effort).
+    # REST_SECS between trials is unrecorded — lets the person reset before the next onset.
     for idx, emotion in enumerate(EMOTIONS):
-        print(f"\n{'─'*50}")
-        print(f"  Trial {idx+1}/{len(EMOTIONS)}: {emotion.upper()}")
-        input("  Press Enter when ready ...")
-        countdown(3)
-        print(f"  [REC] Feeling {emotion.upper()} for {RECORD_SECS}s ...")
-        recorder.start_recording(idx)
-        progress_bar(RECORD_SECS, emotion)
-        recorder.stop_recording()
-        samples_so_far = recorder._samples
-        print(f"  Done. Collected {sum(1 for l in recorder._labels if l == idx)} samples.")
+        print(f"\n{'═'*50}")
+        print(f"  Emotion: {emotion.upper()}  ({N_TRIALS} trials × {TRIAL_SECS}s)")
+        print(f"{'─'*50}")
+        for trial in range(N_TRIALS):
+            input(f"  [Trial {trial+1}/{N_TRIALS}] Press Enter when ready ...")
+            countdown(3)
+            print(f"  [REC] Feel {emotion.upper()} intensely for {TRIAL_SECS}s ...")
+            recorder.start_recording(idx)
+            progress_bar(TRIAL_SECS, emotion)
+            recorder.stop_recording()
+            n_recorded = sum(1 for l in recorder._labels if l == idx)
+            print(f"  Done. ({n_recorded} samples total for {emotion})")
+            if trial < N_TRIALS - 1:
+                print(f"  Rest {REST_SECS}s — clear your mind ...")
+                time.sleep(REST_SECS)
 
     # ── Tear down ─────────────────────────────────────────────────────────────
     p.stop()
