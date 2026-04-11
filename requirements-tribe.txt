@@ -16,3 +16,4 @@ scipy
 scikit-learn
 pandas
 matplotlib
+requests

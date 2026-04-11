@@ -11,6 +11,7 @@ TRIBE v2 neural features for **text** and **photo→video** inputs, plus a small
 | Train classifier | `python -m pipeline.train_element_classifier --help` |
 | Eval on holdout `.npz` | `python -m pipeline.eval_element_classifier --help` |
 | Classify one phrase | `python -m pipeline.classify_text --help` |
+| BFL text→image→TRIBE→class | `python -m pipeline.bfl_tribe_classify --help` (needs `BFL_API_KEY` in `.env`) |
 
 **Photo / video:** by default **no Whisper/ASR** on video audio (`TRIBE_VIDEO_SKIP_WHISPER=1`) and **video-only TRIBE extractors** (`TRIBE_FEATURES_VIDEO_ONLY=1`, skips loading Llama/Wav2Vec for inference). Use **`--video-whisper`** and **`--tribe-all-modalities`** on `photo_neural_matrix` for the full multimodal stack.
 
