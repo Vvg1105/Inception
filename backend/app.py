@@ -620,14 +620,20 @@ class ModelSearchResponse(BaseModel):
 @app.get("/api/search-model", response_model=ModelSearchResponse)
 def search_model(q: str = Query(..., min_length=1)) -> ModelSearchResponse:
     """
-    Search for downloadable 3D models using Perplexity Sonar.
-    Returns results with direct GLB/GLTF download URLs.
+    Search for downloadable 3D models. Tries Perplexity Sonar first,
+    falls back to Sketchfab API if Perplexity is unavailable.
     """
+    results = _search_perplexity(q)
+    if not results:
+        results = _search_sketchfab_models(q)
+    print(f"[search-model] query={q!r} → {len(results)} result(s)")
+    return ModelSearchResponse(results=results, query=q)
+
+
+def _search_perplexity(q: str) -> list[ModelSearchResult]:
     api_key = _perplexity_api_key()
     if not api_key:
-        print("[search-model] No PERPLEXITY_API_KEY set")
-        return ModelSearchResponse(results=[], query=q)
-
+        return []
     try:
         resp = httpx.post(
             SONAR_URL,
@@ -652,16 +658,13 @@ def search_model(q: str = Query(..., min_length=1)) -> ModelSearchResponse:
         resp.raise_for_status()
         data = resp.json()
     except Exception as exc:
-        print(f"[search-model] Perplexity Sonar request failed: {exc}")
-        return ModelSearchResponse(results=[], query=q)
-
+        print(f"[search-model] Perplexity failed: {exc}")
+        return []
     raw_text = ""
     try:
         raw_text = data["choices"][0]["message"]["content"]
     except (KeyError, IndexError):
-        print(f"[search-model] unexpected response shape: {data}")
-        return ModelSearchResponse(results=[], query=q)
-
+        return []
     parsed = _parse_json_loose(raw_text)
     results: list[ModelSearchResult] = []
     for item in parsed.get("results", []):
@@ -671,11 +674,20 @@ def search_model(q: str = Query(..., min_length=1)) -> ModelSearchResponse:
         if not glb_url:
             continue
         results.append(ModelSearchResult(
-            name=item.get("name", q),
-            glb_url=glb_url,
-            source=item.get("source", ""),
-            author=item.get("author", ""),
+            name=item.get("name", q), glb_url=glb_url,
+            source=item.get("source", ""), author=item.get("author", ""),
         ))
+    return results
 
-    print(f"[search-model] query={q!r} → {len(results)} result(s)")
-    return ModelSearchResponse(results=results, query=q)
+
+def _search_sketchfab_models(q: str) -> list[ModelSearchResult]:
+    sf_token = (os.getenv("SKETCHFAB_API_TOKEN") or "").strip()
+    if not sf_token:
+        return []
+    result = _sketchfab_search_glb(q, sf_token)
+    if not result:
+        return []
+    return [ModelSearchResult(
+        name=result["name"], glb_url=result["glb_url"],
+        source="Sketchfab", author=result.get("author", ""),
+    )]

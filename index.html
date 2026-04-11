@@ -1918,8 +1918,19 @@ function closePopup() {
   if (typeof closePlacePreview === 'function') closePlacePreview();
 }
 
+const TRIBE_CLASSES = new Set([
+  'bridge', 'lake', 'skyscraper', 'skyscrapers', 'tree', 'trees', 'house', 'houses',
+  'building', 'building a', 'building b', 'building c', 'building d',
+]);
+
 async function runVisionPipeline(prompt, pos, parsed) {
   if (!backendOnline) {
+    placeObject(prompt, pos, parsed);
+    return;
+  }
+  const key = parsed.base.trim().toLowerCase();
+  if (!TRIBE_CLASSES.has(key)) {
+    console.info(`[Vision] "${key}" not a TRIBE class — using direct model search`);
     placeObject(prompt, pos, parsed);
     return;
   }
