@@ -207,8 +207,8 @@
       z-index: 50; backdrop-filter: blur(8px);
     }
 
-    /* 2-D arousal/valence pad */
-    #emo-pad-wrap { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+    /* 2-D arousal/valence pad — hidden (replaced by dual EEG user cards) */
+    #emo-pad-wrap { display: none !important; }
     #emo-pad {
       width: 110px; height: 110px; position: relative;
       border: 1px solid #ddd; border-radius: 4px; cursor: crosshair;
@@ -508,6 +508,136 @@
     #eye-gaze-start { border-color: #aac; color: #446; }
     #eye-gaze-start:hover:not(:disabled) { background: rgba(80,80,160,0.07); }
     .eye-gaze-btn:disabled { opacity: 0.45; cursor: default; }
+
+    /* ── Neural Symbiosis — dual-user EEG overlays ──────────────────────── */
+
+    /* Permission banner — top-centre */
+    #permission-indicator {
+      position: fixed; top: 18px; left: 50%; transform: translateX(-50%);
+      z-index: 65; pointer-events: none;
+      font-size: 9px; letter-spacing: 0.20em; text-transform: uppercase;
+      color: #6688aa; opacity: 0; transition: opacity 0.5s ease;
+      display: flex; align-items: center; gap: 7px;
+    }
+    #permission-indicator.live { opacity: 1; }
+    #permission-star { color: #88cc88; font-size: 11px; }
+    #permission-label { color: #88cc88; }
+
+    /* Base card used by both user panels */
+    .neural-user-card {
+      position: fixed; bottom: 165px; z-index: 52;
+      background: rgba(248,249,255,0.92); border: 1px solid #dde0ec;
+      border-radius: 6px; padding: 9px 11px; width: 270px;
+      backdrop-filter: blur(8px);
+      box-shadow: 0 2px 14px rgba(0,0,0,0.08);
+      pointer-events: none;
+      opacity: 0; transition: opacity 0.5s ease;
+      font-family: 'Courier New', Courier, monospace;
+    }
+    .neural-user-card.live { opacity: 1; }
+    .neural-user-card.active-user { border-color: #88cc88; }
+
+    #user1-card { left: 12px; }
+    #user2-card { right: 12px; }
+
+    .nuc-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 7px;
+    }
+    .nuc-name {
+      font-size: 7px; letter-spacing: 0.22em; text-transform: uppercase;
+      color: #aab;
+    }
+    .nuc-name.active-user { color: #88cc88; }
+    .nuc-hw {
+      font-size: 6px; letter-spacing: 0.12em; text-transform: uppercase;
+      color: #ccd;
+    }
+
+    /* Body: mini-pad+text on left, brain canvas on right */
+    .nuc-body { display: flex; gap: 10px; align-items: flex-start; }
+    .nuc-left { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+
+    .nuc-label {
+      font-size: 16px; font-weight: 400; letter-spacing: 0.04em;
+      color: #7799bb; margin-bottom: 5px; line-height: 1;
+      transition: color 0.8s ease;
+      min-height: 1.2em;
+    }
+    .nuc-vals {
+      display: flex; gap: 8px; font-size: 8px; letter-spacing: 0.08em;
+      color: #aab; margin-bottom: 5px;
+    }
+    .nuc-vals b { color: #6688aa; }
+    .nuc-blink {
+      font-size: 7px; letter-spacing: 0.14em; text-transform: uppercase;
+      color: #ccd; transition: color 0.1s;
+    }
+    .nuc-blink.active { color: #ff6644; }
+
+    /* Mini arousal/valence dot pad inside each card */
+    .nuc-mini-pad {
+      width: 68px; height: 68px; position: relative;
+      border: 1px solid #e8eaf0; border-radius: 3px; margin-bottom: 6px;
+      background:
+        linear-gradient(to right, rgba(220,120,80,0.12), rgba(80,140,220,0.12)),
+        linear-gradient(to top,   rgba(100,100,100,0.06), rgba(255,220,80,0.06));
+      flex-shrink: 0;
+    }
+    .nuc-dot {
+      position: absolute; width: 8px; height: 8px;
+      background: #557; border: 1.5px solid #fff; border-radius: 50%;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+      transform: translate(-50%, -50%);
+      pointer-events: none; transition: left 0.4s ease, bottom 0.4s ease, background 0.5s ease;
+    }
+
+    /* Brain topo canvas */
+    .nuc-brain {
+      width: 104px; height: 104px; flex-shrink: 0;
+      border-radius: 50%; display: block;
+      image-rendering: pixelated;
+    }
+
+    /* Neural symbiosis display — centre bottom, above existing bar */
+    #symbiosis-display {
+      position: fixed; bottom: 165px; left: 50%; transform: translateX(-50%);
+      z-index: 52; width: 180px;
+      background: rgba(248,249,255,0.92); border: 1px solid #dde0ec;
+      border-radius: 6px; padding: 10px 13px;
+      backdrop-filter: blur(8px);
+      box-shadow: 0 2px 14px rgba(0,0,0,0.08);
+      pointer-events: none;
+      opacity: 0; transition: opacity 0.5s ease;
+      font-family: 'Courier New', Courier, monospace;
+      text-align: center;
+    }
+    #symbiosis-display.live { opacity: 1; }
+    #symbiosis-title {
+      font-size: 7px; letter-spacing: 0.24em; text-transform: uppercase;
+      color: #aab; margin-bottom: 6px;
+    }
+    #symbiosis-label {
+      font-size: 15px; letter-spacing: 0.05em;
+      color: #7799bb; margin-bottom: 6px; line-height: 1;
+      transition: color 0.8s ease;
+    }
+    #symbiosis-bar-wrap {
+      height: 4px; background: #e8eaf2; border-radius: 2px;
+      overflow: hidden; margin-bottom: 5px;
+    }
+    #symbiosis-bar {
+      height: 100%; background: linear-gradient(90deg, #6688aa, #88ccaa);
+      border-radius: 2px; width: 50%;
+      transition: width 0.6s ease, background 0.8s ease;
+    }
+    #symbiosis-score {
+      font-size: 8px; letter-spacing: 0.10em; color: #aab;
+    }
+    #symbiosis-score b { color: #6688aa; }
+
+    /* Dual EEG connect row in world panel */
+    .dual-eeg-row { margin-top: 2px; }
   </style>
 </head>
 <body>
@@ -633,6 +763,16 @@
         <span id="eeg-status" style="font-size:7px;color:#999;white-space:nowrap">off</span>
       </div>
     </div>
+    <div class="wp-row dual-eeg-row" style="align-items:center">
+      <label style="color:#88cc88">dual EEG</label>
+      <div style="flex:1;display:flex;align-items:center;gap:6px">
+        <div class="eye-gaze-actions" style="flex:1">
+          <button type="button" class="eye-gaze-btn" id="dual-eeg-connect" style="border-color:#88cc88;color:#336633">connect</button>
+          <button type="button" class="eye-gaze-btn" id="dual-eeg-disconnect" disabled>disconnect</button>
+        </div>
+        <span id="dual-eeg-status" style="font-size:7px;color:#999;white-space:nowrap">off</span>
+      </div>
+    </div>
   </div>
 
   <!-- hidden defaults for removed controls -->
@@ -670,6 +810,68 @@
       <button id="cancelBtn">cancel</button>
     </div>
   </div>
+</div>
+
+<!-- ── Neural Symbiosis UI ─────────────────────────────────────────────── -->
+
+<!-- Permission indicator (top centre) -->
+<div id="permission-indicator">
+  <span id="permission-star">★</span>
+  <span id="permission-label">user 1 creating</span>
+</div>
+
+<!-- User 1 card (bottom-left) -->
+<div id="user1-card" class="neural-user-card">
+  <div class="nuc-header">
+    <span class="nuc-name" id="u1-name">user 1</span>
+    <span class="nuc-hw">gtech</span>
+  </div>
+  <div class="nuc-body">
+    <div class="nuc-left">
+      <div class="nuc-mini-pad">
+        <div class="nuc-dot" id="u1-dot" style="left:50%;bottom:50%"></div>
+      </div>
+      <div class="nuc-label" id="u1-label">—</div>
+      <div class="nuc-vals">
+        <span>A <b id="u1-arousal">—</b></span>
+        <span>V <b id="u1-valence">—</b></span>
+        <span>F <b id="u1-focus">—</b></span>
+      </div>
+      <div class="nuc-blink" id="u1-blink">—</div>
+    </div>
+    <canvas class="nuc-brain" id="u1-brain" width="104" height="104"></canvas>
+  </div>
+</div>
+
+<!-- User 2 card (bottom-right) -->
+<div id="user2-card" class="neural-user-card">
+  <div class="nuc-header">
+    <span class="nuc-name" id="u2-name">user 2</span>
+    <span class="nuc-hw">openbci</span>
+  </div>
+  <div class="nuc-body">
+    <div class="nuc-left">
+      <div class="nuc-mini-pad">
+        <div class="nuc-dot" id="u2-dot" style="left:50%;bottom:50%"></div>
+      </div>
+      <div class="nuc-label" id="u2-label">—</div>
+      <div class="nuc-vals">
+        <span>A <b id="u2-arousal">—</b></span>
+        <span>V <b id="u2-valence">—</b></span>
+        <span>F <b id="u2-focus">—</b></span>
+      </div>
+      <div class="nuc-blink" id="u2-blink">—</div>
+    </div>
+    <canvas class="nuc-brain" id="u2-brain" width="104" height="104"></canvas>
+  </div>
+</div>
+
+<!-- Neural symbiosis display (bottom centre) -->
+<div id="symbiosis-display">
+  <div id="symbiosis-title">neural symbiosis</div>
+  <div id="symbiosis-label">—</div>
+  <div id="symbiosis-bar-wrap"><div id="symbiosis-bar"></div></div>
+  <div id="symbiosis-score">score <b id="symbiosis-score-val">—</b></div>
 </div>
 
 <!-- Bottom bar -->
@@ -755,6 +957,7 @@
 <script type="module">
 import * as THREE from 'three';
 import { createOrbitRig, createPointerGroundFollow, startEyeGazeBridge, stopEyeGazeBridge, startEEGBridge, stopEEGBridge } from './world-camera/index.js';
+import { startDualEEGBridge, stopDualEEGBridge } from './world-camera/eeg-bridge-dual.js';
 import { GLTFLoader }      from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader }     from 'three/addons/loaders/DRACOLoader.js';
 import { Sky }             from 'three/addons/objects/Sky.js';
@@ -2795,10 +2998,17 @@ worldBtn.addEventListener('click', () => {
   setWorldPanelOpen(!worldPanel.classList.contains('open'));
 });
 let lastDreamBlinkOpenAt = 0;
-window.addEventListener('dream-blink-up', () => {
+window.addEventListener('dream-blink-up', (e) => {
   const c = document.getElementById('blink-open-build');
   if (c && !c.value) return;
   if (popupOpen) return;
+
+  // In dual mode: only open creation menu for the user who has permission.
+  // Single-user mode (no dual bridge active): e.detail.user is undefined → always open.
+  const eventUser  = e.detail && e.detail.user;
+  const activeUser = window.__dreamActiveUser;
+  if (eventUser && activeUser && eventUser !== activeUser) return;
+
   const now = Date.now();
   if (now - lastDreamBlinkOpenAt < 280) return;
   lastDreamBlinkOpenAt = now;
@@ -2965,6 +3175,54 @@ document.getElementById('gaze-sens')?.addEventListener('input', function () {
   setEegUi(false);
 })();
 
+// ── Dual EEG connect / disconnect ──────────────────────────────────────────
+(function wireDualEEGBridge() {
+  const btnOn  = document.getElementById('dual-eeg-connect');
+  const btnOff = document.getElementById('dual-eeg-disconnect');
+  const urlEl  = document.getElementById('eeg-ws-url');        // reuse same URL
+  const st     = document.getElementById('dual-eeg-status');
+
+  function setDualUi(connected) {
+    if (btnOn)  btnOn.disabled  =  connected;
+    if (btnOff) btnOff.disabled = !connected;
+    // Show/hide the neural symbiosis overlay cards
+    const cards = ['user1-card', 'user2-card', 'symbiosis-display', 'permission-indicator'];
+    cards.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.classList.toggle('live', connected);
+    });
+  }
+
+  btnOn?.addEventListener('click', async () => {
+    const url = (urlEl && urlEl.value.trim()) || 'ws://127.0.0.1:8765';
+    if (st) st.textContent = 'Connecting…';
+    try {
+      await startDualEEGBridge({ url });
+      setDualUi(true);
+      if (st) st.textContent = 'Live — dual EEG + symbiosis';
+    } catch (err) {
+      console.warn('[dual-eeg]', err);
+      if (st) st.textContent = 'Failed: ' + String(err.message || err);
+      setDualUi(false);
+    }
+  });
+
+  btnOff?.addEventListener('click', () => {
+    stopDualEEGBridge();
+    setDualUi(false);
+    if (st) st.textContent = 'off';
+  });
+
+  // Update permission indicator text whenever active user changes
+  window.addEventListener('dream-permission-change', (e) => {
+    const u = e.detail.activeUser;
+    const lbl = document.getElementById('permission-label');
+    if (lbl) lbl.textContent = `user ${u} creating`;
+  });
+
+  setDualUi(false);
+})();
+
 // Ground colour
 document.getElementById('ground-color').addEventListener('input', function () {
   groundMat.color.set(this.value);
@@ -3088,6 +3346,287 @@ function syncEmotionFromEEG() {
 
   applyEmotion();
   updateMoodDisplay();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Dual-user EEG sync — Neural Symbiosis
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Warm → cool color for emotion labels
+function _nucLabelColor(arousal, valence) {
+  const r = Math.round(0xcc + (0x99 - 0xcc) * valence);
+  const g = Math.round(0x88 + (0xbb - 0x88) * valence);
+  const b = Math.round(0x55 + (0xdd - 0x55) * valence);
+  return `rgb(${r},${g},${b})`;
+}
+
+// Map symbiosis data to a weather state key
+function _symbiosisWeather(sym) {
+  const { arousal, valence, score } = sym;
+  if (score > 0.75 && valence > 0.55)   return 'happy';    // resonant + positive = bright
+  if (score > 0.75 && arousal > 0.65)   return 'angry';    // resonant + energetic = electric
+  if (score < 0.30)                      return 'fear';     // fully divergent = ominous night
+  if (valence < 0.35)                    return 'sad';      // both sad = overcast
+  if (arousal > 0.65)                    return 'angry';    // both intense
+  return 'happy';
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Brain topographic map — 2D canvas renderer
+// Channel order matches README electrode mapping for each headset.
+// ═══════════════════════════════════════════════════════════════════════════
+
+// User 1 (GTECH BCICore-8): indices 0-7 = Ch1..Ch8
+const _EEG1_CH = [
+  ['FP2', 0.62, 0.11],  // Ch1
+  ['F7',  0.17, 0.28],  // Ch2
+  ['FC5', 0.22, 0.42],  // Ch3
+  ['FP1', 0.38, 0.11],  // Ch4
+  ['P7',  0.17, 0.72],  // Ch5
+  ['T7',  0.07, 0.50],  // Ch6
+  ['T8',  0.93, 0.50],  // Ch7
+  ['O2',  0.62, 0.89],  // Ch8
+];
+
+// User 2 (OpenBCI Cyton): indices 0-7 = ch0..ch7
+const _EEG2_CH = [
+  ['C3',  0.27, 0.50],  // ch0
+  ['C4',  0.73, 0.50],  // ch1
+  ['CZ',  0.50, 0.50],  // ch2
+  ['T3',  0.07, 0.50],  // ch3
+  ['T4',  0.93, 0.50],  // ch4
+  ['F3',  0.32, 0.27],  // ch5
+  ['FZ',  0.50, 0.22],  // ch6
+  ['F4',  0.68, 0.27],  // ch7
+];
+
+/** Convert amplitude 0..1 → jet-like [r,g,b] */
+function _ampToColor(amp) {
+  const a = Math.max(0, Math.min(1, amp));
+  let r, g, b;
+  if (a < 0.25)      { const t = a / 0.25;         r = 0;              g = Math.round(255*t);       b = 255; }
+  else if (a < 0.5)  { const t = (a-0.25)/0.25;    r = 0;              g = 255;                     b = Math.round(255*(1-t)); }
+  else if (a < 0.75) { const t = (a-0.5)/0.25;     r = Math.round(255*t); g = 255;                  b = 0; }
+  else               { const t = (a-0.75)/0.25;    r = 255;            g = Math.round(255*(1-t));   b = 0; }
+  return [r, g, b];
+}
+
+/**
+ * Draw a 2D topographic EEG map on a canvas element.
+ * @param {HTMLCanvasElement} cvs
+ * @param {number[]} amps  - per-channel amplitudes 0..1
+ * @param {Array}    chDefs - [[label, nx, ny], ...] (nx/ny in 0..1 head space)
+ */
+function _drawBrainTopo(cvs, amps, chDefs) {
+  if (!cvs) return;
+  const ctx = cvs.getContext('2d');
+  if (!ctx) return;
+  const W = cvs.width, H = cvs.height;
+  const cx = W / 2, cy = H / 2;
+  const r  = Math.min(W, H) * 0.44;
+
+  ctx.clearRect(0, 0, W, H);
+
+  // Dark head background
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fillStyle = '#0d0d1a';
+  ctx.fill();
+
+  // Clip all heat blobs to head circle
+  ctx.clip();
+
+  if (amps && amps.length) {
+    ctx.globalCompositeOperation = 'screen';
+    const n = Math.min(amps.length, chDefs.length);
+    for (let i = 0; i < n; i++) {
+      const amp = Math.max(0, Math.min(1, amps[i] || 0));
+      if (amp < 0.02) continue;
+      const [, nx, ny] = chDefs[i];
+      const ex = cx + (nx - 0.5) * r * 1.72;
+      const ey = cy + (ny - 0.5) * r * 1.72;
+      const [rr, gg, bb] = _ampToColor(amp);
+      const blobR = r * 0.52;
+      const alpha = 0.08 + amp * 0.52;
+      const grad = ctx.createRadialGradient(ex, ey, 0, ex, ey, blobR);
+      grad.addColorStop(0, `rgba(${rr},${gg},${bb},${alpha.toFixed(3)})`);
+      grad.addColorStop(1, `rgba(${rr},${gg},${bb},0)`);
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.rect(cx - r, cy - r, r * 2, r * 2);
+      ctx.fill();
+    }
+    ctx.globalCompositeOperation = 'source-over';
+  }
+  ctx.restore();
+
+  // Head ring
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.strokeStyle = 'rgba(80,100,160,0.55)';
+  ctx.lineWidth = 1.2;
+  ctx.stroke();
+
+  // Nose nub (top = front)
+  ctx.beginPath();
+  ctx.moveTo(cx - 3, cy - r + 1);
+  ctx.lineTo(cx,     cy - r - 6);
+  ctx.lineTo(cx + 3, cy - r + 1);
+  ctx.strokeStyle = 'rgba(80,100,160,0.45)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // Electrode dots + labels
+  if (amps && amps.length) {
+    const n = Math.min(amps.length, chDefs.length);
+    for (let i = 0; i < n; i++) {
+      const amp = Math.max(0, Math.min(1, amps[i] || 0));
+      const [lbl, nx, ny] = chDefs[i];
+      const ex = cx + (nx - 0.5) * r * 1.72;
+      const ey = cy + (ny - 0.5) * r * 1.72;
+      const [rr, gg, bb] = _ampToColor(amp);
+      ctx.beginPath();
+      ctx.arc(ex, ey, 2.8, 0, Math.PI * 2);
+      ctx.fillStyle = `rgb(${rr},${gg},${bb})`;
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+      ctx.lineWidth = 0.6;
+      ctx.stroke();
+
+      ctx.fillStyle = 'rgba(220,230,255,0.65)';
+      ctx.font = '4.5px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      ctx.fillText(lbl, ex, ey - 3.5);
+    }
+  }
+}
+
+/** Every frame: read dual EEG state, update per-user cards + symbiosis display. */
+function syncDualEmotionFromEEG() {
+  const g1  = window.__dreamEEG1;
+  const g2  = window.__dreamEEG2;
+  const sym = window.__dreamSymbiosis;
+  const active = window.__dreamActiveUser || 1;
+
+  const dualLive = (g1 && g1.present) || (g2 && g2.present);
+  if (!dualLive) return;
+
+  // ── Update user 1 card ────────────────────────────────────────────────────
+  if (g1 && g1.emotion) {
+    const em = g1.emotion;
+    const isActive = active === 1;
+    const card = document.getElementById('user1-card');
+    if (card) card.classList.toggle('active-user', isActive);
+    const nm = document.getElementById('u1-name');
+    if (nm) nm.classList.toggle('active-user', isActive);
+
+    const lbl = document.getElementById('u1-label');
+    if (lbl) {
+      lbl.textContent = em.label || '—';
+      lbl.style.color = _nucLabelColor(em.arousal, em.valence);
+    }
+    const el = document.getElementById('u1-arousal'); if (el) el.textContent = em.arousal.toFixed(2);
+    const ev = document.getElementById('u1-valence'); if (ev) ev.textContent = em.valence.toFixed(2);
+    const ef = document.getElementById('u1-focus');   if (ef) ef.textContent = em.focus.toFixed(2);
+    const eb = document.getElementById('u1-blink');
+    if (eb) {
+      eb.textContent = g1.blink ? 'BLINK' : 'open';
+      eb.classList.toggle('active', !!g1.blink);
+    }
+    // Mini pad dot
+    const dot1 = document.getElementById('u1-dot');
+    if (dot1) {
+      dot1.style.left   = (em.valence * 100) + '%';
+      dot1.style.bottom = (em.arousal * 100) + '%';
+    }
+    // Brain topo canvas
+    _drawBrainTopo(document.getElementById('u1-brain'), g1.ch_amplitudes, _EEG1_CH);
+  }
+
+  // ── Update user 2 card ────────────────────────────────────────────────────
+  if (g2 && g2.emotion) {
+    const em = g2.emotion;
+    const isActive = active === 2;
+    const card = document.getElementById('user2-card');
+    if (card) card.classList.toggle('active-user', isActive);
+    const nm = document.getElementById('u2-name');
+    if (nm) nm.classList.toggle('active-user', isActive);
+
+    const lbl = document.getElementById('u2-label');
+    if (lbl) {
+      lbl.textContent = em.label || '—';
+      lbl.style.color = _nucLabelColor(em.arousal, em.valence);
+    }
+    const el = document.getElementById('u2-arousal'); if (el) el.textContent = em.arousal.toFixed(2);
+    const ev = document.getElementById('u2-valence'); if (ev) ev.textContent = em.valence.toFixed(2);
+    const ef = document.getElementById('u2-focus');   if (ef) ef.textContent = em.focus.toFixed(2);
+    const eb = document.getElementById('u2-blink');
+    if (eb) {
+      eb.textContent = g2.blink ? 'BLINK' : 'open';
+      eb.classList.toggle('active', !!g2.blink);
+    }
+    const dot2 = document.getElementById('u2-dot');
+    if (dot2) {
+      dot2.style.left   = (em.valence * 100) + '%';
+      dot2.style.bottom = (em.arousal * 100) + '%';
+    }
+    // Brain topo canvas
+    _drawBrainTopo(document.getElementById('u2-brain'), g2.ch_amplitudes, _EEG2_CH);
+  }
+
+  // ── Update symbiosis display ───────────────────────────────────────────────
+  if (sym) {
+    const slbl = document.getElementById('symbiosis-label');
+    const sbar = document.getElementById('symbiosis-bar');
+    const sval = document.getElementById('symbiosis-score-val');
+
+    if (slbl) {
+      slbl.textContent = sym.label || '—';
+      // colour: resonant = green, divergent = red, middle = blue
+      const score = sym.score ?? 0.5;
+      const r = Math.round(100 + (1 - score) * 80);
+      const g = Math.round(100 + score * 80);
+      const b = Math.round(150);
+      slbl.style.color = `rgb(${r},${g},${b})`;
+    }
+    if (sbar) {
+      const pct = Math.round((sym.score ?? 0.5) * 100);
+      sbar.style.width = pct + '%';
+      // Green when resonant, blue-grey when divergent
+      sbar.style.background = sym.score > 0.7
+        ? 'linear-gradient(90deg, #6688aa, #88cc88)'
+        : sym.score > 0.4
+          ? 'linear-gradient(90deg, #6688aa, #aabbdd)'
+          : 'linear-gradient(90deg, #aa6666, #6688aa)';
+    }
+    if (sval) sval.textContent = (sym.score ?? 0).toFixed(2);
+
+    // Drive weather from neural symbiosis (overrides single-user weather)
+    const chk = document.getElementById('eeg-drive-mood');
+    if (chk && chk.checked) {
+      const wLabel = _symbiosisWeather(sym);
+      if (wLabel !== pendingWeatherLabel) {
+        pendingWeatherLabel = wLabel;
+        labelStableAt = performance.now();
+      } else if (
+        wLabel !== activeWeatherLabel &&
+        performance.now() - labelStableAt > LABEL_DEBOUNCE_MS
+      ) {
+        switchWeatherTo(wLabel);
+      }
+
+      // Drive scene emotion from symbiosis combined A/V
+      emotion.arousal = THREE.MathUtils.clamp(sym.arousal, 0, 1);
+      emotion.valence = THREE.MathUtils.clamp(sym.valence, 0, 1);
+      emotion.focus   = THREE.MathUtils.clamp(
+        ((g1?.emotion?.focus ?? 0.5) + (g2?.emotion?.focus ?? 0.5)) / 2, 0, 1
+      );
+      applyEmotion();
+      updateMoodDisplay();
+    }
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -3648,6 +4187,7 @@ function animate() {
   controls.update();
 
   syncEmotionFromEEG();
+  syncDualEmotionFromEEG();
   applyWeather(dt);
 
   updatePointerFollow(dt);
@@ -3702,8 +4242,9 @@ function animate() {
 // Boot
 // ═══════════════════════════════════════════════════════════════════════════
 window.addEventListener('beforeunload', () => {
-  try { stopEyeGazeBridge(); } catch (_) { /* ignore */ }
-  try { stopEEGBridge(); } catch (_) { /* ignore */ }
+  try { stopEyeGazeBridge(); }    catch (_) { /* ignore */ }
+  try { stopEEGBridge(); }        catch (_) { /* ignore */ }
+  try { stopDualEEGBridge(); }    catch (_) { /* ignore */ }
 });
 
 applySkyParams();   // initialise sunPos + sky uniforms before first render

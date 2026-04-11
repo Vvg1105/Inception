@@ -36,3 +36,28 @@ export TRIBE_FORCE_CPU=1
 export CUDA_VISIBLE_DEVICES=
 python -m pipeline.neural_matrix --csv city_elements_dataset.csv --output outputs/city_elements_neural.npz
 ```
+
+
+# EEG
+
+Understanding which channels correspond to what placement will help you create a visualization map for EEG, live. 
+### EEG 1 - GTECH
+Ch8 - O2
+ch5 - p7
+ch6 - t7
+ch3 - fc5
+ch2 - f7
+ch4 - fp1
+ch7 - t8
+ch1 - fp2
+
+
+### EEG 2 - OPENBCI
+ch0 - grey C3
+ch1 - purple C4
+ch2 - blue CZ
+ch3 - green T3
+ch4 - yellow T4
+ch5 - orange F3
+ch6 - red FZ
+ch7 - brown F4
