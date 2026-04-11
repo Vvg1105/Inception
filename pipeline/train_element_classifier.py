@@ -54,8 +54,27 @@ def _pca_component_cap(
     max_by_data = min(max(1, pca_components), n_train, n_features)
     if cv_folds < 2:
         return max_by_data
+    y_int = np.asarray(y_train, dtype=np.int64)
+    counts = np.bincount(y_int)
+    min_class = int(counts.min()) if counts.size else 0
+    # StratifiedKFold needs n_splits <= each class count on y_train.
+    n_splits_eff = min(cv_folds, min_class)
+    if n_splits_eff < 2:
+        logger.warning(
+            "PCA cap: skipping stratified fold sizing (rarest class has %d train samples; "
+            "need ≥2 per class for CV). Using data/feature cap only.",
+            min_class,
+        )
+        return max_by_data
+    if n_splits_eff < cv_folds:
+        logger.info(
+            "PCA cap: using %d stratified folds (requested %d; limited by smallest class=%d)",
+            n_splits_eff,
+            cv_folds,
+            min_class,
+        )
     skf = StratifiedKFold(
-        n_splits=cv_folds,
+        n_splits=n_splits_eff,
         shuffle=True,
         random_state=random_state,
     )
@@ -243,9 +262,25 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     if args.cv_folds >= 2:
-        try:
+        y_tr = np.asarray(y_train, dtype=np.int64)
+        c = np.bincount(y_tr)
+        min_cls = int(c.min()) if c.size else 0
+        cv_splits = min(args.cv_folds, min_cls)
+        if cv_splits < 2:
+            logger.warning(
+                "Skipping CV: smallest class has %d train samples (stratified k-fold needs ≥2)",
+                min_cls,
+            )
+        else:
+            if cv_splits < args.cv_folds:
+                logger.info(
+                    "CV: using %d folds (requested %d; capped by smallest class=%d)",
+                    cv_splits,
+                    args.cv_folds,
+                    min_cls,
+                )
             skf = StratifiedKFold(
-                n_splits=args.cv_folds,
+                n_splits=cv_splits,
                 shuffle=True,
                 random_state=args.random_state,
             )
@@ -264,12 +299,10 @@ def main(argv: list[str] | None = None) -> int:
             )
             logger.info(
                 "CV accuracy on train (%d folds): %.3f ± %.3f",
-                args.cv_folds,
+                cv_splits,
                 scores.mean(),
                 scores.std(),
             )
-        except ValueError as e:
-            logger.warning("Skipping CV: %s", e)
 
     args.model_out.parent.mkdir(parents=True, exist_ok=True)
     joblib.dump(
