@@ -96,9 +96,9 @@ class VisionClassifyResponse(BaseModel):
     confidence: float
     probabilities: dict[str, float]
     narration: str
-    #: Mean-pooled TRIBE video embedding — one value per TRIBE vertex (often ~10k–25k dims).
-    tribe_embedding: list[float] = Field(default_factory=list)
     tribe_dim: int = 0
+    #: Base64-encoded PNG of TRIBE activations rendered on fsaverage5 pial surface via nilearn.
+    brain_image_b64: str = ""
 
 
 # ── Local heuristic (same idea as `buildLocalParams` in index.html) ──────────
@@ -303,15 +303,22 @@ def vision_classify(req: VisionClassifyRequest) -> VisionClassifyResponse:
 
     snippet = req.prompt.strip()[:72]
     narration = f"Vision: {classified} ({confidence:.0%}) — {snippet}"
-    emb = tribe_pooled.astype(float, copy=False).tolist()
+
+    brain_b64 = ""
+    try:
+        from brain_render import render_tribe_brain_b64
+        brain_b64 = render_tribe_brain_b64(tribe_pooled)
+    except Exception as exc:  # noqa: BLE001
+        print(f"[brain_render] skipped (nilearn may not be installed): {exc}")
+
     return VisionClassifyResponse(
         classified_label=classified,
         place_key=place_key,
         confidence=confidence,
         probabilities=probs,
         narration=narration,
-        tribe_embedding=emb,
-        tribe_dim=len(emb),
+        tribe_dim=int(tribe_pooled.shape[0]),
+        brain_image_b64=brain_b64,
     )
 
 

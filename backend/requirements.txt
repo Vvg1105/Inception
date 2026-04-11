@@ -7,3 +7,5 @@ websockets>=12.0
 opencv-python>=4.9.0
 mediapipe>=0.10.9
 httpx>=0.27.0
+nilearn>=0.10.0
+matplotlib>=3.8.0
