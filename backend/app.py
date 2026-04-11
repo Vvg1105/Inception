@@ -497,8 +497,6 @@ async def vision_pipeline(req: VisionClassifyRequest):
     pipeline_w = int(os.getenv("BFL_PIPELINE_WIDTH", "1024"))
     pipeline_h = int(os.getenv("BFL_PIPELINE_HEIGHT", "1024"))
 
-    sf_token = (os.getenv("SKETCHFAB_API_TOKEN") or "").strip()
-
     async def _stream():
         loop = asyncio.get_running_loop()
         prompt_text = req.prompt.strip()
@@ -516,22 +514,16 @@ async def vision_pipeline(req: VisionClassifyRequest):
         img_b64 = _b64.b64encode(img_bytes).decode("ascii")
         yield json.dumps({"stage": "image", "image_b64": img_b64, "mime": mime}) + "\n"
 
-        tribe_task = asyncio.ensure_future(loop.run_in_executor(
-            None,
-            lambda: classify_from_image_bytes(
-                img_bytes=img_bytes,
-                mime=mime,
-                cache_folder=os.getenv("TRIBE_CACHE_FOLDER"),
-            ),
-        ))
-
-        sf_task = asyncio.ensure_future(loop.run_in_executor(
-            None,
-            lambda: _sketchfab_search_glb(prompt_text, sf_token),
-        )) if sf_token else None
-
         try:
-            classified, place_key, confidence, probs, tribe_pooled = await tribe_task
+            result = await loop.run_in_executor(
+                None,
+                lambda: classify_from_image_bytes(
+                    img_bytes=img_bytes,
+                    mime=mime,
+                    cache_folder=os.getenv("TRIBE_CACHE_FOLDER"),
+                ),
+            )
+            classified, place_key, confidence, probs, tribe_pooled = result
 
             snippet = prompt_text[:72]
             narration = (
@@ -561,14 +553,6 @@ async def vision_pipeline(req: VisionClassifyRequest):
             }) + "\n"
         except Exception as exc:
             yield json.dumps({"stage": "error", "detail": str(exc)}) + "\n"
-
-        if sf_task is not None:
-            try:
-                sf_result = await sf_task
-                if sf_result:
-                    yield json.dumps({"stage": "model", **sf_result}) + "\n"
-            except Exception as exc:
-                print(f"[Sketchfab] search failed: {exc}")
 
     return StreamingResponse(_stream(), media_type="application/x-ndjson")
 
