@@ -326,6 +326,28 @@
       from { opacity: 0; transform: translateY(12px) scale(0.97); }
       to { opacity: 1; transform: translateY(0) scale(1); }
     }
+    .neural-imagined-wrap {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      margin-bottom: 16px;
+      animation: neuralPopupIn 0.32s ease-out;
+    }
+    .neural-imagined-wrap.visible { display: flex; }
+    .neural-imagined-wrap img {
+      max-width: 220px;
+      max-height: 220px;
+      border-radius: 8px;
+      box-shadow: 0 2px 12px rgba(40, 50, 80, 0.13);
+      object-fit: cover;
+    }
+    .neural-imagined-label {
+      font-size: 8px;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: #8899aa;
+      margin-top: 8px;
+    }
     .neural-pipeline-title {
       font-size: 8px;
       letter-spacing: 0.28em;
@@ -715,6 +737,10 @@
 <div id="neural-pipeline-overlay" role="dialog" aria-modal="false" aria-labelledby="neural-pipeline-dialog-title" aria-live="polite" aria-busy="false" hidden>
   <div class="neural-pipeline-card">
     <div class="neural-pipeline-title" id="neural-pipeline-dialog-title">neural pipeline</div>
+    <div class="neural-imagined-wrap" id="neural-imagined-wrap">
+      <img id="neural-imagined-img" alt="Imagined image">
+      <span class="neural-imagined-label">imagined image</span>
+    </div>
     <div class="neural-nodes-wrap" aria-hidden="true">
       <span class="neural-node"></span><span class="neural-axon"></span>
       <span class="neural-node"></span><span class="neural-axon"></span>
@@ -1454,6 +1480,8 @@ const loaderEl = document.getElementById('loader');
 const neuralOverlay = document.getElementById('neural-pipeline-overlay');
 const neuralPhaseEl = document.getElementById('neural-pipeline-phase');
 const neuralPromptEl = document.getElementById('neural-pipeline-prompt');
+const neuralImaginedWrap = document.getElementById('neural-imagined-wrap');
+const neuralImaginedImg = document.getElementById('neural-imagined-img');
 const tribeBrainWrap = document.getElementById('tribe-brain-wrap');
 const tribeBrainImg = document.getElementById('tribe-brain-img');
 const tribeBrainLabel = document.getElementById('tribe-brain-label');
@@ -1638,6 +1666,7 @@ const NEURAL_PHASE_MESSAGES = [
 function showNeuralPipelineUI(promptText) {
   if (!neuralOverlay || !neuralPhaseEl) return;
   hideTribeBrain();
+  if (neuralImaginedWrap) neuralImaginedWrap.classList.remove('visible');
   if (neuralPromptEl) {
     const s = (promptText || '').trim();
     neuralPromptEl.textContent = s
@@ -1656,11 +1685,19 @@ function showNeuralPipelineUI(promptText) {
   neuralOverlay.setAttribute('aria-busy', 'true');
 }
 
+function showImaginedImage(b64, mime) {
+  if (!neuralImaginedWrap || !neuralImaginedImg) return;
+  neuralImaginedImg.src = `data:${mime || 'image/jpeg'};base64,${b64}`;
+  neuralImaginedWrap.classList.add('visible');
+  if (neuralPhaseEl) neuralPhaseEl.textContent = 'Encoding neural activations…';
+}
+
 function hideNeuralPipelineUI() {
   if (neuralPhaseTimer) {
     clearInterval(neuralPhaseTimer);
     neuralPhaseTimer = null;
   }
+  if (neuralImaginedWrap) neuralImaginedWrap.classList.remove('visible');
   if (neuralOverlay) {
     neuralOverlay.classList.remove('neural-on');
     neuralOverlay.setAttribute('hidden', '');
@@ -1901,29 +1938,54 @@ placeBtn.addEventListener('click', async () => {
   const useVision = document.getElementById('vision-place')?.checked ?? false;
   if (useVision && backendOnline) {
     showNeuralPipelineUI(raw);
+    const visionPayload = {
+      prompt: raw,
+      emotion: { ...emotion },
+      mood: document.getElementById('mood-state').textContent,
+      environment: {
+        mood_quadrant: getMoodKey(),
+        sun_elevation_deg: skyParams.elevation,
+        sun_azimuth_deg: skyParams.azimuth,
+        sky_turbidity: skyParams.turbidity,
+        fog_density: parseFloat(document.getElementById('fog-slider')?.value ?? '0.3'),
+      },
+    };
     try {
       const ctrl = new AbortController();
       const t = setTimeout(() => ctrl.abort(), 600000);
-      const res = await fetch(`${BACKEND}/api/vision-classify`, {
+
+      /* Step 1 — generate BFL image (fast) and display it in the popup */
+      const imgRes = await fetch(`${BACKEND}/api/vision-imagine`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(visionPayload),
+        signal: ctrl.signal,
+      });
+      if (!imgRes.ok) {
+        const errBody = await imgRes.text();
+        console.warn('[Vision/imagine] HTTP', imgRes.status, errBody);
+        clearTimeout(t);
+        hideNeuralPipelineUI();
+        placeObject(raw, pos, parsed);
+        return;
+      }
+      const imgJson = await imgRes.json();
+      showImaginedImage(imgJson.image_b64, imgJson.mime);
+
+      /* Step 2 — TRIBE + classifier (slower) using the image we already have */
+      const classRes = await fetch(`${BACKEND}/api/vision-classify-image`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          image_b64: imgJson.image_b64,
+          mime: imgJson.mime,
           prompt: raw,
-          emotion: { ...emotion },
-          mood: document.getElementById('mood-state').textContent,
-          environment: {
-            mood_quadrant: getMoodKey(),
-            sun_elevation_deg: skyParams.elevation,
-            sun_azimuth_deg: skyParams.azimuth,
-            sky_turbidity: skyParams.turbidity,
-            fog_density: parseFloat(document.getElementById('fog-slider')?.value ?? '0.3'),
-          },
         }),
         signal: ctrl.signal,
       });
       clearTimeout(t);
-      if (res.ok) {
-        const v = await res.json();
+      if (classRes.ok) {
+        const v = await classRes.json();
         parsed.base = v.place_key;
         hideNeuralPipelineUI();
         showTribeBrainFromVision(v);
@@ -1931,8 +1993,8 @@ placeBtn.addEventListener('click', async () => {
         placeObject(`${v.classified_label}: ${raw}`, pos, parsed);
         return;
       }
-      const errBody = await res.text();
-      console.warn('[Vision] HTTP', res.status, errBody);
+      const errBody = await classRes.text();
+      console.warn('[Vision/classify-image] HTTP', classRes.status, errBody);
     } catch (e) {
       console.warn('[Vision] failed, using text parse only', e);
     } finally {

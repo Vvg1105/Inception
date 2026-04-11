@@ -71,37 +71,39 @@ def _load_tribe(cache_folder: str | None):
     return _tribe_model
 
 
-def run_vision_classify(
+def generate_bfl_image(
     *,
     prompt: str,
     api_key: str,
     bfl_model: str = "flux-2-klein-4b",
     width: int = 1024,
     height: int = 1024,
-    duration_sec: float = 5.0,
-    fps: int = 24,
-    cache_folder: str | None = None,
-) -> tuple[str, str, float, dict[str, float], np.ndarray]:
-    """Return ``(classified_label, place_key, confidence, probabilities, tribe_pooled)``.
-
-    ``tribe_pooled`` is the mean-pooled TRIBE prediction vector ``(n_vertices,)`` (one scalar
-    per model vertex / activation site), same vector fed to the element classifier.
-    """
+) -> tuple[bytes, str]:
+    """Step 1: generate the BFL image. Returns ``(image_bytes, mime_type)``."""
     from pipeline.bfl_api import bfl_generate_image_bytes
-    from pipeline.photo_neural_matrix import _check_ffmpeg, image_to_looped_mp4
-    from tribe.model import predict_from_video_pooled
 
     prompt = (prompt or "").strip()
     if not prompt:
         raise ValueError("prompt is empty")
-
-    img_bytes, mime = bfl_generate_image_bytes(
-        api_key=api_key,
-        prompt=prompt,
-        model=bfl_model,
-        width=width,
-        height=height,
+    return bfl_generate_image_bytes(
+        api_key=api_key, prompt=prompt, model=bfl_model, width=width, height=height,
     )
+
+
+def classify_from_image_bytes(
+    *,
+    img_bytes: bytes,
+    mime: str,
+    duration_sec: float = 5.0,
+    fps: int = 24,
+    cache_folder: str | None = None,
+) -> tuple[str, str, float, dict[str, float], np.ndarray]:
+    """Step 2: image bytes → looped MP4 → TRIBE → classifier.
+
+    Returns ``(classified_label, place_key, confidence, probabilities, tribe_pooled)``.
+    """
+    from pipeline.photo_neural_matrix import _check_ffmpeg, image_to_looped_mp4
+    from tribe.model import predict_from_video_pooled
 
     ext = ".jpg"
     if "png" in (mime or "").lower():
@@ -145,3 +147,24 @@ def run_vision_classify(
         return classified, place_key, confidence, probs, pooled_out
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
+
+
+def run_vision_classify(
+    *,
+    prompt: str,
+    api_key: str,
+    bfl_model: str = "flux-2-klein-4b",
+    width: int = 1024,
+    height: int = 1024,
+    duration_sec: float = 5.0,
+    fps: int = 24,
+    cache_folder: str | None = None,
+) -> tuple[str, str, float, dict[str, float], np.ndarray]:
+    """Full pipeline (legacy single-call path)."""
+    img_bytes, mime = generate_bfl_image(
+        prompt=prompt, api_key=api_key, bfl_model=bfl_model, width=width, height=height,
+    )
+    return classify_from_image_bytes(
+        img_bytes=img_bytes, mime=mime,
+        duration_sec=duration_sec, fps=fps, cache_folder=cache_folder,
+    )

@@ -97,8 +97,20 @@ class VisionClassifyResponse(BaseModel):
     probabilities: dict[str, float]
     narration: str
     tribe_dim: int = 0
-    #: Base64-encoded PNG of TRIBE activations rendered on fsaverage5 pial surface via nilearn.
     brain_image_b64: str = ""
+
+
+class VisionImagineResponse(BaseModel):
+    """Step 1: just the BFL-generated image (returned fast, before TRIBE runs)."""
+    image_b64: str
+    mime: str
+
+
+class VisionClassifyFromImageRequest(BaseModel):
+    """Step 2: send the previously-generated image back for TRIBE → classify."""
+    image_b64: str
+    mime: str = "image/jpeg"
+    prompt: str = ""
 
 
 # ── Local heuristic (same idea as `buildLocalParams` in index.html) ──────────
@@ -310,6 +322,81 @@ def vision_classify(req: VisionClassifyRequest) -> VisionClassifyResponse:
         brain_b64 = render_tribe_brain_b64(tribe_pooled)
     except Exception as exc:  # noqa: BLE001
         print(f"[brain_render] skipped (nilearn may not be installed): {exc}")
+
+    return VisionClassifyResponse(
+        classified_label=classified,
+        place_key=place_key,
+        confidence=confidence,
+        probabilities=probs,
+        narration=narration,
+        tribe_dim=int(tribe_pooled.shape[0]),
+        brain_image_b64=brain_b64,
+    )
+
+
+@app.post("/api/vision-imagine", response_model=VisionImagineResponse)
+def vision_imagine(req: VisionClassifyRequest) -> VisionImagineResponse:
+    """Step 1: Generate BFL image only (fast). Returns base64 image."""
+    import base64 as _b64
+
+    api_key = (os.getenv("BFL_API_KEY") or "").strip()
+    if not api_key:
+        raise HTTPException(status_code=503, detail="BFL_API_KEY not set")
+    try:
+        from vision_place import generate_bfl_image
+    except ImportError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    try:
+        img_bytes, mime = generate_bfl_image(
+            prompt=req.prompt.strip(),
+            api_key=api_key,
+            bfl_model=os.getenv("BFL_MODEL", "flux-2-klein-4b"),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    return VisionImagineResponse(
+        image_b64=_b64.b64encode(img_bytes).decode("ascii"),
+        mime=mime or "image/jpeg",
+    )
+
+
+@app.post("/api/vision-classify-image", response_model=VisionClassifyResponse)
+def vision_classify_image(req: VisionClassifyFromImageRequest) -> VisionClassifyResponse:
+    """Step 2: Previously-generated BFL image → TRIBE → classifier + brain render."""
+    import base64 as _b64
+
+    try:
+        from vision_place import classify_from_image_bytes
+    except ImportError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    try:
+        img_bytes = _b64.b64decode(req.image_b64)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"bad base64: {exc}") from exc
+    try:
+        classified, place_key, confidence, probs, tribe_pooled = classify_from_image_bytes(
+            img_bytes=img_bytes,
+            mime=req.mime,
+            cache_folder=os.getenv("TRIBE_CACHE_FOLDER"),
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    snippet = req.prompt.strip()[:72] if req.prompt else ""
+    narration = f"Vision: {classified} ({confidence:.0%})" + (f" — {snippet}" if snippet else "")
+
+    brain_b64 = ""
+    try:
+        from brain_render import render_tribe_brain_b64
+        brain_b64 = render_tribe_brain_b64(tribe_pooled)
+    except Exception as exc:  # noqa: BLE001
+        print(f"[brain_render] skipped: {exc}")
 
     return VisionClassifyResponse(
         classified_label=classified,
