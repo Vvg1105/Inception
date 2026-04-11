@@ -12,10 +12,11 @@ export function createOrbitRig(canvas) {
   const controls = new OrbitControls(camera, canvas);
   controls.enableDamping = true;
   controls.dampingFactor = 0.055;
+  /** Wheel / pinch zoom (r161+ fixes r160 wheel scaling; tune here if needed). */
+  controls.zoomSpeed = 2.1;
   controls.minDistance = 2;
   controls.maxDistance = 150;
   controls.maxPolarAngle = Math.PI / 2 - 0.04;
-  controls.screenSpacePanning = false;
 
   return { camera, controls };
 }

@@ -38,6 +38,23 @@
       color: #667788; margin-top: 5px; transition: color 1.4s ease;
     }
 
+    /* ── EEG HUD ────────────────────────────────────────────────────── */
+    #eeg-hud {
+      position: fixed; top: 70px; right: 28px; z-index: 60;
+      text-align: right; pointer-events: none;
+      font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase;
+      color: #889; opacity: 0; transition: opacity 0.6s ease;
+    }
+    #eeg-hud.live { opacity: 1; }
+    #eeg-hud-title { font-size: 7px; color: #aab; margin-bottom: 3px; }
+    #eeg-hud-vals { display: flex; gap: 10px; justify-content: flex-end; }
+    #eeg-hud-vals b { font-weight: 600; color: #6688aa; }
+    #eeg-hud-blink {
+      font-size: 8px; margin-top: 3px; color: #99aacc;
+      transition: color 0.15s;
+    }
+    #eeg-hud-blink.active { color: #ff6644; }
+
     /* ── World panel ───────────────────────────────────────────────────── */
     #world-btn {
       position: fixed; top: 20px; left: 20px; z-index: 70;
@@ -68,6 +85,7 @@
     .wp-row { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
     .wp-row:last-child { margin-bottom: 0; }
     .wp-row label { font-size: 9px; color: #888; width: 52px; flex-shrink: 0; letter-spacing: 0.05em; }
+    .wp-divider { border-top: 1px solid #e4e4e4; margin: 8px 0 10px; }
 
     input[type="color"] {
       width: 32px; height: 22px; border: 1px solid #ddd; border-radius: 3px;
@@ -95,9 +113,29 @@
     #popup {
       display: none; position: fixed; background: rgba(252,252,255,0.97);
       border: 1px solid #ccc; border-radius: 4px; padding: 16px 18px;
-      z-index: 100; width: 270px;
+      z-index: 100; width: 300px;
       backdrop-filter: blur(10px);
       box-shadow: 0 4px 30px rgba(0,0,0,0.15);
+    }
+    .popup-tabs {
+      display: flex; gap: 4px; margin-bottom: 12px;
+      border-bottom: 1px solid #eee; padding-bottom: 8px;
+    }
+    .popup-tab {
+      flex: 1; font-family: inherit; font-size: 8px; letter-spacing: 0.14em;
+      text-transform: uppercase; padding: 6px 8px; cursor: pointer;
+      border: 1px solid #e0e0e8; background: #fafafa; color: #999;
+      border-radius: 3px; transition: all 0.12s;
+    }
+    .popup-tab:hover { border-color: #ccc; color: #666; }
+    .popup-tab.active { border-color: #aac; color: #446; background: rgba(80,80,160,0.06); }
+    #place-preview-canvas {
+      display: block; width: 100%; height: 160px; border-radius: 4px;
+      border: 1px solid #e8e8ee; background: linear-gradient(180deg, #f4f6fb 0%, #e8ecf4 100%);
+    }
+    #place-preview-status {
+      font-size: 8px; color: #999; margin-top: 8px; line-height: 1.45;
+      letter-spacing: 0.04em;
     }
     #popup-label {
       font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase;
@@ -110,6 +148,28 @@
     }
     #objectInput:focus { border-bottom-color: #888; }
     #objectInput::placeholder { color: #bbb; }
+    #object-input-wrap { position: relative; width: 100%; }
+    #object-suggest {
+      display: none;
+      position: absolute; left: 0; right: 0; top: calc(100% - 1px);
+      z-index: 130;
+      max-height: 188px; overflow-y: auto;
+      margin: 0;
+      background: #fff;
+      border: 1px solid #c8c8d4;
+      border-radius: 4px;
+      box-shadow: 0 8px 28px rgba(0,0,0,0.14);
+      font-size: 12px; letter-spacing: 0.02em;
+    }
+    .object-suggest-item {
+      padding: 7px 11px; cursor: pointer; color: #333;
+      border-bottom: 1px solid #f0f0f6; line-height: 1.35;
+    }
+    .object-suggest-item:last-child { border-bottom: none; }
+    .object-suggest-item:hover, .object-suggest-item.suggest-active {
+      background: rgba(80,80,160,0.09);
+    }
+    .object-suggest-prefix { font-weight: 700; color: #446; }
 
     #popup-hint {
       font-size: 9px; color: #bbb; margin-top: 6px;
@@ -274,6 +334,16 @@
   <div id="mood-sub">unfocused</div>
 </div>
 
+<div id="eeg-hud">
+  <div id="eeg-hud-title">EEG</div>
+  <div id="eeg-hud-vals">
+    <span>A <b id="hud-arousal">—</b></span>
+    <span>V <b id="hud-valence">—</b></span>
+    <span>F <b id="hud-focus">—</b></span>
+  </div>
+  <div id="eeg-hud-blink">—</div>
+</div>
+
 <!-- World panel toggle -->
 <button id="world-btn">world</button>
 <div id="world-panel">
@@ -355,103 +425,89 @@
   </div>
 
   <div class="wp-section">
-    <div class="wp-title">pointer</div>
-    <div class="wp-row">
-      <label title="Higher = ground cursor catches the ray faster (less floaty lag)">inertia</label>
-      <input type="range" class="wp-slider" id="cursor-inertia" min="0" max="1" step="0.02" value="0.72" style="flex:1">
-      <span id="v-cursor-inertia" style="font-size:8px;color:#888;width:28px;text-align:right">0.72</span>
-    </div>
-    <div class="wp-row">
-      <label>gamepad</label>
-      <input type="range" class="wp-slider" id="gamepad-nudge" min="0" max="1" step="0.05" value="0.4" style="flex:1">
-      <span id="v-gamepad" style="font-size:8px;color:#888;width:28px;text-align:right">0.40</span>
-    </div>
-    <div class="wp-row" style="align-items:flex-start">
+    <div class="wp-title">input</div>
+    <div class="wp-row" style="align-items:center">
       <label>eye gaze</label>
-      <div style="flex:1">
-        <p style="font-size:7px;color:#888;line-height:1.5;margin:0 0 6px">
-          <strong>MediaPipe</strong> eye blendshapes (not raw head/iris drift) need your <strong>webcam</strong>. Click <strong>start</strong>, then <strong>Allow</strong>.
-        </p>
-        <div class="eye-gaze-actions">
-          <button type="button" class="eye-gaze-btn" id="eye-gaze-start">start webcam</button>
-          <button type="button" class="eye-gaze-btn" id="eye-gaze-stop" disabled>stop</button>
+      <div style="flex:1;display:flex;align-items:center;gap:6px">
+        <div class="eye-gaze-actions" style="flex:1">
+          <button type="button" class="eye-gaze-btn" id="eye-gaze-start">connect</button>
+          <button type="button" class="eye-gaze-btn" id="eye-gaze-stop" disabled>disconnect</button>
         </div>
-        <p id="eye-gaze-status" style="font-size:7px;color:#999;margin:6px 0 0;line-height:1.45">Camera off — press start webcam above</p>
+        <span id="eye-gaze-status" style="font-size:7px;color:#999;white-space:nowrap">off</span>
       </div>
     </div>
-    <div class="wp-row">
-      <label>gaze mix</label>
-      <input type="range" class="wp-slider" id="gaze-mix" min="0" max="1" step="0.02" value="0.85" style="flex:1">
-      <span id="v-gaze-mix" style="font-size:8px;color:#888;width:28px;text-align:right">0.85</span>
-    </div>
-    <div class="wp-row">
-      <label>gaze sens</label>
-      <input type="range" class="wp-slider" id="gaze-sens" min="0.35" max="2" step="0.05" value="1" style="flex:1">
-      <span id="v-gaze-sens" style="font-size:8px;color:#888;width:32px;text-align:right">1.00</span>
-    </div>
     <div class="wp-row" style="align-items:center">
-      <label>blink hold</label>
-      <label style="display:flex;align-items:center;gap:6px;flex:1;cursor:pointer;font-size:8px;color:#666">
-        <input type="checkbox" id="blink-pause-cursor" style="margin:0">
-        pause cursor on blink
-      </label>
+      <label>EEG</label>
+      <div style="flex:1;display:flex;align-items:center;gap:6px">
+        <div class="eye-gaze-actions" style="flex:1">
+          <button type="button" class="eye-gaze-btn" id="eeg-connect">connect</button>
+          <button type="button" class="eye-gaze-btn" id="eeg-disconnect" disabled>disconnect</button>
+        </div>
+        <span id="eeg-status" style="font-size:7px;color:#999;white-space:nowrap">off</span>
+      </div>
     </div>
-    <div class="wp-row" style="align-items:center">
-      <label>blink src</label>
-      <select id="blink-source" style="flex:1;font-size:8px;padding:3px 4px;font-family:inherit;color:#555;border:1px solid #ddd;border-radius:3px;background:#fff">
-        <option value="auto" selected>auto — EEG if present, else camera</option>
-        <option value="camera">camera (MediaPipe)</option>
-        <option value="eeg">EEG only</option>
-      </select>
-    </div>
-    <div class="wp-row" style="align-items:center">
-      <label>blink UI</label>
-      <label style="display:flex;align-items:center;gap:6px;flex:1;cursor:pointer;font-size:8px;color:#666">
-        <input type="checkbox" id="blink-open-build" checked style="margin:0">
-        open build (place) after blink
-      </label>
-    </div>
-    <p style="font-size:7px;color:#aaa;letter-spacing:0.05em;line-height:1.55;margin:6px 0 0;">
-      Gaze: blend with mouse (inertia). Custom gaze:
-      <code style="font-size:7px;color:#888">window.__dreamGaze</code> NDC.
-      EEG blink: each frame set
-      <code style="font-size:7px;color:#888">window.__dreamEEG = { present: true, blink: boolean }</code>.
-      Listen for <code style="font-size:7px;color:#888">dream-blink-up</code> / <code style="font-size:7px;color:#888">dream-blink-down</code> (e.g. release = “click”).
-    </p>
   </div>
+
+  <!-- hidden defaults for removed controls -->
+  <input type="hidden" id="eye-ws-url" value="ws://127.0.0.1:8766">
+  <input type="hidden" id="eeg-ws-url" value="ws://127.0.0.1:8765">
+  <input type="hidden" id="cursor-inertia" value="0.72">
+  <input type="hidden" id="gamepad-nudge" value="0.4">
+  <input type="hidden" id="gaze-mix" value="0.85">
+  <input type="hidden" id="gaze-sens" value="1.4">
+  <input type="hidden" id="blink-open-build" value="1">
+  <input type="hidden" id="blink-pause-cursor" value="">
+  <select id="blink-source" style="display:none"><option value="auto" selected></option></select>
+  <input type="checkbox" id="eeg-drive-mood" checked style="display:none">
+
+</div>
 
 </div>
 
 <!-- Placement popup -->
 <div id="popup">
   <div id="popup-label">place object</div>
-  <input type="text" id="objectInput"
-         placeholder="building a · river · cloud · park…"
-         autocomplete="off" spellcheck="false">
-  <div id="parse-preview"></div>
-  <div id="popup-scale-row">
-    <label>scale</label>
-    <input type="range" class="wp-slider" id="place-scale" min="0.15" max="3.5" step="0.05" value="1" style="flex:1">
-    <span id="v-place-scale" style="font-size:8px;color:#888;width:36px;text-align:right">1.00×</span>
+  <div class="popup-tabs" role="tablist">
+    <button type="button" class="popup-tab active" data-panel="search" role="tab" aria-selected="true">search</button>
+    <button type="button" class="popup-tab" data-panel="preview" role="tab" aria-selected="false">preview</button>
   </div>
-  <div id="popup-hint">
-    civic: stadium · arena · plaza · garden · playground · park<br>
-    commercial: building a–n · skyscraper a–e · wide building · mall<br>
-    industrial: industrial a–t · factory · chimney · tank<br>
-    suburban: suburban a–u · house · tree · fence · path long · driveway long<br>
-    roads: road · bend · curve · crossroad · roundabout · bridge<br>
-    nature: river · pond · lake · hill · cloud<br>
-    scale: slider multiplies placement size (stacks with words like massive / tiny). Click a placed object to resize it.<br>
-    prefix any name: <em>red massive glowing bridge</em>
+  <div id="popup-panel-search">
+    <div id="object-input-wrap">
+      <input type="text" id="objectInput"
+             placeholder="type po… → pond · Tab completes"
+             autocomplete="off" spellcheck="false">
+      <div id="object-suggest" role="listbox" aria-label="name matches"></div>
+    </div>
+    <datalist id="place-object-datalist"></datalist>
+    <div id="parse-preview"></div>
+    <div id="popup-scale-row">
+      <label>scale</label>
+      <input type="range" class="wp-slider" id="place-scale" min="0.15" max="3.5" step="0.05" value="1" style="flex:1">
+      <span id="v-place-scale" style="font-size:8px;color:#888;width:36px;text-align:right">1.00×</span>
+    </div>
+    <div id="popup-hint">
+      civic: stadium · arena · plaza · garden · playground · park<br>
+      commercial: building a–n · skyscraper a–e · wide building · mall<br>
+      industrial: industrial a–t · factory · chimney · tank<br>
+      suburban: suburban a–u · house · tree · fence · path long · driveway long<br>
+      roads: road · bend · curve · crossroad · roundabout · bridge<br>
+      nature: river · pond · lake · hill · cloud<br>
+      scale: slider multiplies placement size (stacks with words like massive / tiny). Click a placed object to resize it.<br>
+      prefix any name: <em>red massive glowing bridge</em>
+    </div>
+    <div id="tint-row">
+      <span id="tint-label">tint</span>
+      <input type="color" id="obj-color" value="#ffffff">
+      <span id="tint-reset">no tint</span>
+    </div>
+    <div id="popup-buttons">
+      <button id="placeBtn">place</button>
+      <button id="cancelBtn">cancel</button>
+    </div>
   </div>
-  <div id="tint-row">
-    <span id="tint-label">tint</span>
-    <input type="color" id="obj-color" value="#ffffff">
-    <span id="tint-reset">no tint</span>
-  </div>
-  <div id="popup-buttons">
-    <button id="placeBtn">place</button>
-    <button id="cancelBtn">cancel</button>
+  <div id="popup-panel-preview" style="display:none;" role="tabpanel">
+    <canvas id="place-preview-canvas" width="264" height="160"></canvas>
+    <p id="place-preview-status">Enter a name in <strong>search</strong> — preview updates here (GLB spins slowly).</p>
   </div>
 </div>
 
@@ -497,15 +553,15 @@
 <script type="importmap">
 {
   "imports": {
-    "three":          "https://unpkg.com/three@0.160.0/build/three.module.js",
-    "three/addons/":  "https://unpkg.com/three@0.160.0/examples/jsm/"
+    "three":          "https://unpkg.com/three@0.161.0/build/three.module.js",
+    "three/addons/":  "https://unpkg.com/three@0.161.0/examples/jsm/"
   }
 }
 </script>
 
 <script type="module">
 import * as THREE from 'three';
-import { createOrbitRig, createPointerGroundFollow, startEyeGazeBridge, stopEyeGazeBridge } from './world-camera/index.js';
+import { createOrbitRig, createPointerGroundFollow, startEyeGazeBridge, stopEyeGazeBridge, startEEGBridge, stopEEGBridge } from './world-camera/index.js';
 import { GLTFLoader }      from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader }     from 'three/addons/loaders/DRACOLoader.js';
 import { Sky }             from 'three/addons/objects/Sky.js';
@@ -797,7 +853,7 @@ scene.add(ground);
 
 // Shared raycast + ground pointer (mouse / gaze / gamepad) — world-camera/pointer-follow.js
 const raycaster = new THREE.Raycaster();
-const { cursorLight, cursorDisc, updatePointerFollow } = createPointerGroundFollow({
+const { cursorLight, cursorDisc, updatePointerFollow, getBlendedNdc } = createPointerGroundFollow({
   scene, camera, ground, raycaster, canvas,
 });
 
@@ -916,7 +972,7 @@ composer.addPass(new OutputPass());
 // GLTF / DRACO loader
 // ═══════════════════════════════════════════════════════════════════════════
 const dracoLoader = new DRACOLoader();
-dracoLoader.setDecoderPath('https://unpkg.com/three@0.160.0/examples/jsm/libs/draco/');
+dracoLoader.setDecoderPath('https://unpkg.com/three@0.161.0/examples/jsm/libs/draco/');
 
 const gltfLoader = new GLTFLoader();
 gltfLoader.setDRACOLoader(dracoLoader);
@@ -1086,12 +1142,11 @@ function applyUserPlaceScale(root, parsed) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// LLM stub — replace this fetch with real GPT-4o call when backend is ready
+// LLM materials — POST JSON to Python backend (`backend/app.py`); local fallback if offline
 // ═══════════════════════════════════════════════════════════════════════════
 const BACKEND = 'http://localhost:8000';
 let backendOnline = false;
 
-// Test if backend is reachable
 fetch(`${BACKEND}/health`, { signal: AbortSignal.timeout(1500) })
   .then(() => { backendOnline = true; console.log('[Backend] online'); })
   .catch(() => { console.log('[Backend] offline — using local material generation'); });
@@ -1108,17 +1163,24 @@ async function getLLMMaterials(parsed, emo) {
           hints:      { color: parsed.color, size: parsed.size, material: parsed.matHints },
           emotion:    emo,
           mood:       document.getElementById('mood-state').textContent,
+          environment: {
+            mood_quadrant:   getMoodKey(),
+            sun_elevation_deg: skyParams.elevation,
+            sun_azimuth_deg:   skyParams.azimuth,
+            sky_turbidity:     skyParams.turbidity,
+            fog_density:       parseFloat(document.getElementById('fog-slider')?.value ?? '0.3'),
+          },
         }),
       });
       const data = await res.json();
       if (data.narration)   showNarration(data.narration);
       if (data.audio_b64)   playAudio(data.audio_b64);
-      return data.material_params;
+      if (data.material_params && typeof data.material_params === 'object') return data.material_params;
+      return buildLocalParams(parsed, emo);
     } catch (e) {
       console.warn('[Backend] request failed, using local fallback', e);
     }
   }
-  // ── Local fallback — emotion-driven procedural materials ──────────────
   return buildLocalParams(parsed, emo);
 }
 
@@ -1266,6 +1328,8 @@ let   mouseDownXY = { x: 0, y: 0 };
 
 const popup       = document.getElementById('popup');
 const objectInput = document.getElementById('objectInput');
+/** Filled after PLACE_AUTOCOMPLETE_NAMES exists — live prefix autocomplete. */
+let updatePlaceSuggest = () => {};
 const placeBtn    = document.getElementById('placeBtn');
 const cancelBtn   = document.getElementById('cancelBtn');
 
@@ -1339,9 +1403,9 @@ canvas.addEventListener('click', (e) => {
 
 function openPopup(cx, cy) {
   popupOpen        = true;
-  controls.enabled = false;
+  syncOrbitFromPanels();
 
-  const pw = 280, ph = 210;
+  const pw = 310, ph = 420;
   const uiH = 80;  // approximate bottom bar height
   const px = Math.min(cx + 12, window.innerWidth  - pw - 8);
   const py = Math.min(cy + 12, window.innerHeight - ph - uiH - 8);
@@ -1352,14 +1416,24 @@ function openPopup(cx, cy) {
   objectInput.value   = '';
   const preview = document.getElementById('parse-preview');
   if (preview) preview.style.display = 'none';
+  document.querySelectorAll('.popup-tab').forEach((b, i) => {
+    const searchTab = b.dataset.panel === 'search';
+    b.classList.toggle('active', searchTab);
+    b.setAttribute('aria-selected', searchTab ? 'true' : 'false');
+  });
+  const ps = document.getElementById('popup-panel-search');
+  const pp = document.getElementById('popup-panel-preview');
+  if (ps) ps.style.display = 'block';
+  if (pp) pp.style.display = 'none';
   setTimeout(() => objectInput.focus(), 40);
 }
 
 function closePopup() {
   popup.style.display = 'none';
   popupOpen           = false;
-  controls.enabled    = true;
+  syncOrbitFromPanels();
   pendingPos          = null;
+  if (typeof closePlacePreview === 'function') closePlacePreview();
 }
 
 placeBtn.addEventListener('click', () => {
@@ -1379,8 +1453,30 @@ placeBtn.addEventListener('click', () => {
 cancelBtn.addEventListener('click', closePopup);
 
 objectInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter')  placeBtn.click();
-  if (e.key === 'Escape') closePopup();
+  const sug = document.getElementById('object-suggest');
+  const open = sug && sug.style.display !== 'none' && sug.querySelector('.object-suggest-item');
+  if (e.key === 'Escape') {
+    if (open) {
+      e.preventDefault();
+      sug.style.display = 'none';
+      return;
+    }
+    closePopup();
+    return;
+  }
+  if (e.key === 'Tab' && open) {
+    e.preventDefault();
+    const first = sug.querySelector('.object-suggest-item');
+    if (first) first.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+    return;
+  }
+  if (e.key === 'Enter') placeBtn.click();
+});
+objectInput.addEventListener('blur', () => {
+  setTimeout(() => {
+    const bx = document.getElementById('object-suggest');
+    if (bx) bx.style.display = 'none';
+  }, 200);
 });
 
 function updateParsePreview() {
@@ -1410,19 +1506,30 @@ function updateParsePreview() {
   preview.style.display = 'block';
 }
 
-objectInput.addEventListener('input', updateParsePreview);
+objectInput.addEventListener('input', () => {
+  updateParsePreview();
+  updatePlaceSuggest();
+  if (typeof schedulePlacePreviewRefresh === 'function') schedulePlacePreviewRefresh();
+});
 document.getElementById('place-scale')?.addEventListener('input', function () {
   const v = document.getElementById('v-place-scale');
   if (v) v.textContent = `${parseFloat(this.value).toFixed(2)}×`;
   updateParsePreview();
+  if (typeof schedulePlacePreviewRefresh === 'function') schedulePlacePreviewRefresh();
 });
 
-// Clicking outside popup closes it
-document.addEventListener('mousedown', (e) => {
-  if (popupOpen && !popup.contains(e.target) && e.target !== canvas) {
+// Clicking outside popup closes it (native datalist UI sits outside #popup — list= removed; still guard)
+document.addEventListener(
+  'mousedown',
+  (e) => {
+    if (!popupOpen) return;
+    if (e.target === canvas) return;
+    const t = e.target;
+    if (t && typeof t.closest === 'function' && t.closest('#popup')) return;
     closePopup();
-  }
-});
+  },
+  false
+);
 
 document.getElementById('selection-scale')?.addEventListener('input', function () {
   if (!selectedPlacedRoot) return;
@@ -1473,37 +1580,10 @@ function refreshObjectList() {
 // ═══════════════════════════════════════════════════════════════════════════
 // Emotion — scene reactivity
 // ═══════════════════════════════════════════════════════════════════════════
-const _fogLow  = new THREE.Color(0xfff0e8);  // warm white / amber
-const _fogHigh = new THREE.Color(0xe8f0ff);  // cool white / blue
-const _ltWarm  = new THREE.Color(0xffe4c4);  // honey sun
-const _ltCool  = new THREE.Color(0xb8d4f8);  // soft sky (not saturated blue)
-
 function applyEmotion() {
   const { arousal, valence, focus } = emotion;
 
-  // ── Fog — user density slider × emotion; horizon colour tints fog ────────
-  const fogEl = document.getElementById('fog-slider');
-  const fogSlide = fogEl ? parseFloat(fogEl.value) : 0.3;
-  scene.fog.density = (0.004 + arousal * 0.028) * (0.28 + fogSlide * 1.35);
-  const fc = new THREE.Color().lerpColors(_fogLow, _fogHigh, valence);
-  if (skyTintBlend > 0.001) fc.lerp(userSkyHorizon, skyTintBlend * 0.55);
-  scene.fog.color.copy(fc);
-
-  // ── Directional light — stays in a natural daylight range (no harsh white) ─
-  dirLight.color.lerpColors(_ltWarm, _ltCool, valence);
-  dirLight.intensity = 1.55 + arousal * 0.95;
-
-  // ── Ambient tint ─────────────────────────────────────────────────────────
-  const ambHue = new THREE.Color().lerpColors(
-    new THREE.Color(1.0, 0.92, 0.85),   // warm white
-    new THREE.Color(0.88, 0.93, 1.0),   // cool white
-    valence
-  );
-  if (skyTintBlend > 0.001) ambHue.lerp(userSkyZenith, skyTintBlend * 0.1);
-  ambientLight.color.copy(ambHue);
-
-  // ── Emissive tint on all placed objects ─────────────────────────────────
-  // arousal → red glow; valence modulates toward blue
+  // Emissive tint on placed objects (arousal → red glow)
   const rCh = arousal * 0.22;
   const bCh = (1 - valence) * 0.04;
   placedObjects.forEach(obj => {
@@ -1512,7 +1592,6 @@ function applyEmotion() {
       const mats = Array.isArray(child.material) ? child.material : [child.material];
       mats.forEach(mat => {
         if (mat.emissive !== undefined) {
-          // Don't override the warm window lights — only darken their base
           if (mat.emissiveIntensity > 0.5) return;
           mat.emissive.setRGB(rCh, 0, bCh);
           mat.needsUpdate = true;
@@ -1521,15 +1600,11 @@ function applyEmotion() {
     });
   });
 
-  // ── Bloom — toned down so highlights stay legible (less milky haze) ─────
-  bloomPass.strength  = 0.14 + focus * 1.35;
+  // Bloom threshold/radius still follow focus
   bloomPass.threshold = 0.91 - focus * 0.28;
   bloomPass.radius    = 0.48 - focus * 0.26;
 
-  // ── Grain — arousal feeds noise ─────────────────────────────────────────
-  grainPass.uniforms.intensity.value = 0.02 + arousal * 0.075;
-
-  // ── Cursor light — white; intensity / distance still follow mood ──
+  // Cursor light follows mood
   cursorLight.color.setHex(0xffffff);
   cursorLight.intensity = 1.8 + arousal * 2.2;
   cursorLight.distance  = 12 + focus * 10;
@@ -1687,6 +1762,225 @@ for (let i = 0; i < 2000; i++) {
 starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starVerts, 3));
 const starField = new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0xffffff, size: 2.5, sizeAttenuation: false, transparent: true, opacity: 0 }));
 scene.add(starField);
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Weather system — emotion-driven environment states
+// ═══════════════════════════════════════════════════════════════════════════
+
+const WEATHER_STATES = {
+  happy: {
+    sky:     'day',
+    zenith:  new THREE.Color(0xa8d0f0),
+    horizon: new THREE.Color(0xe8f4ff),
+    ground:  new THREE.Color(0x4a7a3a),
+    fogDensity: 0.006,
+    fogColor: new THREE.Color(0xe8f0ff),
+    dirColor: new THREE.Color(0xfff0d0),
+    dirIntensity: 2.2,
+    ambColor: new THREE.Color(0xfff8ee),
+    ambIntensity: 0.85,
+    bloomStrength: 0.20,
+    grain: 0.02,
+    rain: false,
+    lightning: false,
+  },
+  sad: {
+    sky:     'overcast',
+    zenith:  new THREE.Color(0x778899),
+    horizon: new THREE.Color(0xccccdd),
+    ground:  new THREE.Color(0x555566),
+    fogDensity: 0.032,
+    fogColor: new THREE.Color(0x999aaa),
+    dirColor: new THREE.Color(0xb0b8c4),
+    dirIntensity: 0.9,
+    ambColor: new THREE.Color(0x889098),
+    ambIntensity: 0.50,
+    bloomStrength: 0.08,
+    grain: 0.05,
+    rain: true,
+    lightning: false,
+  },
+  angry: {
+    sky:     'dusk',
+    zenith:  new THREE.Color(0x1a0a40),
+    horizon: new THREE.Color(0xff5020),
+    ground:  new THREE.Color(0x1a0a0e),
+    fogDensity: 0.018,
+    fogColor: new THREE.Color(0x2a1020),
+    dirColor: new THREE.Color(0xff8844),
+    dirIntensity: 1.6,
+    ambColor: new THREE.Color(0x442222),
+    ambIntensity: 0.40,
+    bloomStrength: 0.55,
+    grain: 0.08,
+    rain: false,
+    lightning: true,
+  },
+  fear: {
+    sky:     'night',
+    zenith:  new THREE.Color(0x000510),
+    horizon: new THREE.Color(0x0a0a20),
+    ground:  new THREE.Color(0x0a0a0e),
+    fogDensity: 0.038,
+    fogColor: new THREE.Color(0x080818),
+    dirColor: new THREE.Color(0x6688bb),
+    dirIntensity: 0.6,
+    ambColor: new THREE.Color(0x222244),
+    ambIntensity: 0.30,
+    bloomStrength: 0.65,
+    grain: 0.09,
+    rain: false,
+    lightning: false,
+  },
+};
+
+// Current interpolated weather values (start at happy)
+const weatherCurrent = {
+  zenith:  new THREE.Color(0xa8d0f0),
+  horizon: new THREE.Color(0xe8f4ff),
+  ground:  new THREE.Color(0x4a7a3a),
+  fogDensity: 0.006,
+  fogColor: new THREE.Color(0xe8f0ff),
+  dirColor: new THREE.Color(0xfff0d0),
+  dirIntensity: 2.2,
+  ambColor: new THREE.Color(0xfff8ee),
+  ambIntensity: 0.85,
+  bloomStrength: 0.20,
+  grain: 0.02,
+};
+
+let activeWeatherLabel  = 'happy';
+let pendingWeatherLabel = 'happy';
+let labelStableAt       = 0;       // timestamp when pending label first appeared
+const LABEL_DEBOUNCE_MS = 1500;    // label must be stable this long to switch
+const WEATHER_LERP      = 0.025;   // per-frame blend speed (~2-3s transition)
+
+// ── Rain particle system ─────────────────────────────────────────────────
+const RAIN_COUNT = 2500;
+const rainGeo    = new THREE.BufferGeometry();
+const rainPos    = new Float32Array(RAIN_COUNT * 3);
+const rainVel    = new Float32Array(RAIN_COUNT);
+for (let i = 0; i < RAIN_COUNT; i++) {
+  rainPos[i * 3]     = (Math.random() - 0.5) * 120;   // x
+  rainPos[i * 3 + 1] = Math.random() * 60 + 5;        // y
+  rainPos[i * 3 + 2] = (Math.random() - 0.5) * 120;   // z
+  rainVel[i]         = 18 + Math.random() * 14;        // fall speed
+}
+rainGeo.setAttribute('position', new THREE.Float32BufferAttribute(rainPos, 3));
+const rainMat = new THREE.PointsMaterial({
+  color: 0xbbccdd,
+  size: 1.8,
+  transparent: true,
+  opacity: 0.0,
+  sizeAttenuation: true,
+  depthWrite: false,
+});
+const rainField = new THREE.Points(rainGeo, rainMat);
+rainField.frustumCulled = false;
+scene.add(rainField);
+let rainTargetOpacity = 0;
+
+// ── Lightning flash ──────────────────────────────────────────────────────
+let lightningActive    = false;
+let lightningNext      = 0;         // next flash timestamp
+let lightningFlashEnd  = 0;         // when current flash ends
+const lightningOverlay = document.createElement('div');
+lightningOverlay.style.cssText = 'position:fixed;inset:0;background:white;opacity:0;pointer-events:none;z-index:9999;transition:opacity 0.08s;';
+document.body.appendChild(lightningOverlay);
+
+function scheduleNextLightning() {
+  lightningNext = performance.now() + 3000 + Math.random() * 6000;
+}
+
+function applyWeather(dt) {
+  const target = WEATHER_STATES[activeWeatherLabel] || WEATHER_STATES.happy;
+  const t = Math.min(1, WEATHER_LERP * (dt / 0.016));  // normalise to ~60fps
+
+  // Lerp colors
+  weatherCurrent.zenith.lerp(target.zenith, t);
+  weatherCurrent.horizon.lerp(target.horizon, t);
+  weatherCurrent.ground.lerp(target.ground, t);
+  weatherCurrent.fogColor.lerp(target.fogColor, t);
+  weatherCurrent.dirColor.lerp(target.dirColor, t);
+  weatherCurrent.ambColor.lerp(target.ambColor, t);
+
+  // Lerp scalars
+  weatherCurrent.fogDensity   += (target.fogDensity   - weatherCurrent.fogDensity)   * t;
+  weatherCurrent.dirIntensity += (target.dirIntensity - weatherCurrent.dirIntensity) * t;
+  weatherCurrent.ambIntensity += (target.ambIntensity - weatherCurrent.ambIntensity) * t;
+  weatherCurrent.bloomStrength += (target.bloomStrength - weatherCurrent.bloomStrength) * t;
+  weatherCurrent.grain        += (target.grain        - weatherCurrent.grain)        * t;
+
+  // Apply sky preset (only when label actually changes to avoid resetting sliders)
+  // Sky params are set once on label switch, not every frame
+
+  // Apply to scene
+  scene.fog.density = weatherCurrent.fogDensity;
+  scene.fog.color.copy(weatherCurrent.fogColor);
+
+  dirLight.color.copy(weatherCurrent.dirColor);
+  dirLight.intensity = weatherCurrent.dirIntensity;
+
+  ambientLight.color.copy(weatherCurrent.ambColor);
+  ambientLight.intensity = weatherCurrent.ambIntensity;
+
+  groundMat.color.copy(weatherCurrent.ground);
+
+  userSkyZenith.copy(weatherCurrent.zenith);
+  userSkyHorizon.copy(weatherCurrent.horizon);
+
+  bloomPass.strength  = weatherCurrent.bloomStrength;
+  grainPass.uniforms.intensity.value = weatherCurrent.grain;
+
+  // ── Rain update ────────────────────────────────────────────────────────
+  rainTargetOpacity = target.rain ? 0.55 : 0.0;
+  rainMat.opacity += (rainTargetOpacity - rainMat.opacity) * t;
+
+  if (rainMat.opacity > 0.01) {
+    const posArr = rainGeo.attributes.position.array;
+    for (let i = 0; i < RAIN_COUNT; i++) {
+      posArr[i * 3 + 1] -= rainVel[i] * dt;
+      if (posArr[i * 3 + 1] < -1) {
+        posArr[i * 3]     = (Math.random() - 0.5) * 120;
+        posArr[i * 3 + 1] = 45 + Math.random() * 20;
+        posArr[i * 3 + 2] = (Math.random() - 0.5) * 120;
+      }
+    }
+    rainGeo.attributes.position.needsUpdate = true;
+  }
+
+  // ── Lightning update ───────────────────────────────────────────────────
+  const wantsLightning = target.lightning;
+  if (wantsLightning && !lightningActive) {
+    lightningActive = true;
+    scheduleNextLightning();
+  } else if (!wantsLightning) {
+    lightningActive = false;
+    lightningOverlay.style.opacity = '0';
+  }
+
+  if (lightningActive) {
+    const now = performance.now();
+    if (now >= lightningNext && now > lightningFlashEnd) {
+      lightningOverlay.style.opacity = '0.35';
+      dirLight.intensity = 6.0;
+      ambientLight.intensity = 3.0;
+      lightningFlashEnd = now + 100 + Math.random() * 80;
+      scheduleNextLightning();
+    }
+    if (now >= lightningFlashEnd && lightningFlashEnd > 0) {
+      lightningOverlay.style.opacity = '0';
+      lightningFlashEnd = 0;
+    }
+  }
+}
+
+function switchWeatherTo(label) {
+  if (!WEATHER_STATES[label]) return;
+  if (label === activeWeatherLabel) return;
+  activeWeatherLabel = label;
+  setSkyPreset(WEATHER_STATES[label].sky);
+}
 
 // ── Visible sun disc (billboard) — warm colours, matches sky sun direction ────
 function createSunDisc() {
@@ -1936,6 +2230,7 @@ async function simulateLLM() {
 // Simulate button + spacebar (button optional — HTML may omit it)
 document.getElementById('simulate-btn')?.addEventListener('click', simulateLLM);
 window.addEventListener('keydown', e => {
+  if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable)) return;
   if (e.code === 'Space' && !popupOpen) { e.preventDefault(); simulateLLM(); }
 });
 
@@ -1957,26 +2252,46 @@ function syncUserSkyFromInputs() {
 
 const worldBtn   = document.getElementById('world-btn');
 const worldPanel = document.getElementById('world-panel');
+
+/** Orbit off while world panel or place popup is up (avoids dragging the scene from UI). */
+function syncOrbitFromPanels() {
+  const worldOpen = worldPanel && worldPanel.classList.contains('open');
+  controls.enabled = !worldOpen && !popupOpen;
+}
+
 function setWorldPanelOpen(open) {
   if (!worldPanel || !worldBtn) return;
   worldPanel.classList.toggle('open', open);
   worldBtn.classList.toggle('open', open);
   worldBtn.textContent = open ? 'world ×' : 'world';
+  syncOrbitFromPanels();
 }
 worldBtn.addEventListener('click', () => {
   setWorldPanelOpen(!worldPanel.classList.contains('open'));
 });
+let lastDreamBlinkOpenAt = 0;
 window.addEventListener('dream-blink-up', () => {
   const c = document.getElementById('blink-open-build');
-  if (c && !c.checked) return;
+  if (c && !c.value) return;
   if (popupOpen) return;
+  const now = Date.now();
+  if (now - lastDreamBlinkOpenAt < 280) return;
+  lastDreamBlinkOpenAt = now;
   clearPlacedSelection();
-  mouseNDC.set(0, 0);
+  const blend = getBlendedNdc();
+  mouseNDC.copy(blend);
   raycaster.setFromCamera(mouseNDC, camera);
-  const ghits = raycaster.intersectObject(ground, false);
+  let ghits = raycaster.intersectObject(ground, false);
+  if (ghits.length === 0) {
+    mouseNDC.set(0, 0);
+    raycaster.setFromCamera(mouseNDC, camera);
+    ghits = raycaster.intersectObject(ground, false);
+  }
   if (ghits.length === 0) return;
   pendingPos = ghits[0].point.clone();
-  openPopup(window.innerWidth * 0.5, window.innerHeight * 0.36);
+  const cx = ((blend.x + 1) * 0.5) * window.innerWidth;
+  const cy = ((1 - blend.y) * 0.5) * window.innerHeight;
+  openPopup(cx, cy);
 });
 
 document.getElementById('sun-elevation')?.addEventListener('input', function () {
@@ -2049,24 +2364,35 @@ document.getElementById('gaze-sens')?.addEventListener('input', function () {
 (function wireEyeGazeButtons() {
   const btnStart = document.getElementById('eye-gaze-start');
   const btnStop  = document.getElementById('eye-gaze-stop');
+  const urlEl    = document.getElementById('eye-ws-url');
   const st       = document.getElementById('eye-gaze-status');
+  let gazeStatusInterval = null;
 
-  function setEyeGazeUi(running) {
-    if (btnStart) btnStart.disabled = running;
-    if (btnStop)  btnStop.disabled  = !running;
+  function setEyeGazeUi(connected) {
+    if (btnStart) btnStart.disabled = connected;
+    if (btnStop)  btnStop.disabled  = !connected;
+    if (gazeStatusInterval) { clearInterval(gazeStatusInterval); gazeStatusInterval = null; }
+    if (connected && st) {
+      gazeStatusInterval = setInterval(() => {
+        const g = window.__dreamGaze;
+        if (!g || !g.active) { st.textContent = 'Disconnected'; return; }
+        if (!g.faceDetected) { st.textContent = 'Connected — no face detected'; return; }
+        const b = g.blinkingFromCamera ? '  BLINK' : '';
+        st.textContent = `gaze (${g.x.toFixed(2)}, ${g.y.toFixed(2)})${b}`;
+      }, 250);
+    }
   }
 
   btnStart?.addEventListener('click', async () => {
-    if (st) st.textContent = 'Loading MediaPipe… (first run may take ~10–20s)';
+    const url = (urlEl && urlEl.value.trim()) || 'ws://127.0.0.1:8766';
+    if (st) st.textContent = 'Connecting…';
     try {
-      await startEyeGazeBridge();
+      await startEyeGazeBridge(url);
       setEyeGazeUi(true);
-      if (st) {
-        st.textContent = 'Camera on — cursor uses EYE_LOOK_* blendshapes (eye-in-socket), not head pose.';
-      }
+      if (st) st.textContent = 'Connected — tracking iris';
     } catch (err) {
       console.warn('[eye-gaze]', err);
-      if (st) st.textContent = String(err.message || err);
+      if (st) st.textContent = 'Failed: ' + String(err.message || err);
       setEyeGazeUi(false);
     }
   });
@@ -2074,10 +2400,44 @@ document.getElementById('gaze-sens')?.addEventListener('input', function () {
   btnStop?.addEventListener('click', () => {
     stopEyeGazeBridge();
     setEyeGazeUi(false);
-    if (st) st.textContent = 'Camera off — press start webcam when you want to try again';
+    if (st) st.textContent = 'Disconnected';
   });
 
   setEyeGazeUi(false);
+})();
+
+(function wireEEGBridgeButtons() {
+  const btnOn = document.getElementById('eeg-connect');
+  const btnOff = document.getElementById('eeg-disconnect');
+  const urlEl = document.getElementById('eeg-ws-url');
+  const st = document.getElementById('eeg-status');
+
+  function setEegUi(connected) {
+    if (btnOn) btnOn.disabled = connected;
+    if (btnOff) btnOff.disabled = !connected;
+  }
+
+  btnOn?.addEventListener('click', async () => {
+    const url = (urlEl && urlEl.value.trim()) || 'ws://127.0.0.1:8765';
+    if (st) st.textContent = 'Connecting…';
+    try {
+      await startEEGBridge({ url });
+      setEegUi(true);
+      if (st) st.textContent = 'Live — emotion every 100ms, blink → place UI';
+    } catch (err) {
+      console.warn('[eeg]', err);
+      if (st) st.textContent = 'Failed: ' + String(err.message || err);
+      setEegUi(false);
+    }
+  });
+
+  btnOff?.addEventListener('click', () => {
+    stopEEGBridge();
+    setEegUi(false);
+    if (st) st.textContent = 'EEG off';
+  });
+
+  setEegUi(false);
 })();
 
 // Ground colour
@@ -2139,6 +2499,71 @@ window.addEventListener('mouseup',   ()  => { padDragging = false; });
 pad.addEventListener('touchstart', (e) => { padDragging = true; readPad(e.touches[0].clientX, e.touches[0].clientY); }, { passive: true });
 window.addEventListener('touchmove', (e) => { if (padDragging) readPad(e.touches[0].clientX, e.touches[0].clientY); }, { passive: true });
 window.addEventListener('touchend',  ()  => { padDragging = false; });
+
+/** Every frame: read emotion from Python EEG decoder, update scene + HUD. */
+function syncEmotionFromEEG() {
+  const hud = document.getElementById('eeg-hud');
+  const g = typeof window !== 'undefined' ? window.__dreamEEG : null;
+  const live = g && g.present;
+
+  // Show / hide HUD
+  if (hud) hud.classList.toggle('live', !!live);
+
+  if (!live) return;
+
+  // Always update HUD numbers (even if "drives mood" is off)
+  const em = g.emotion;
+  if (em) {
+    const ha = document.getElementById('hud-arousal');
+    const hv = document.getElementById('hud-valence');
+    const hf = document.getElementById('hud-focus');
+    if (ha) ha.textContent = em.arousal.toFixed(2);
+    if (hv) hv.textContent = em.valence.toFixed(2);
+    if (hf) hf.textContent = em.focus.toFixed(2);
+  }
+
+  const blinkEl = document.getElementById('eeg-hud-blink');
+  if (blinkEl) {
+    const blinking = !!g.blink;
+    blinkEl.textContent = blinking ? 'BLINK' : 'eyes open';
+    blinkEl.classList.toggle('active', blinking);
+  }
+
+  // If checkbox off, just show the numbers but don't drive the scene
+  const chk = document.getElementById('eeg-drive-mood');
+  if (!chk || !chk.checked) return;
+  if (!em) return;
+
+  const { arousal, valence, focus } = em;
+  if (![arousal, valence, focus].every((n) => typeof n === 'number' && Number.isFinite(n))) return;
+
+  emotion.arousal = THREE.MathUtils.clamp(arousal, 0, 1);
+  emotion.valence = THREE.MathUtils.clamp(valence, 0, 1);
+  emotion.focus   = THREE.MathUtils.clamp(focus, 0, 1);
+
+  setPadFromEmotion();
+  const fs = document.getElementById('s-focus');
+  const vf = document.getElementById('v-focus');
+  if (fs) fs.value = String(emotion.focus);
+  if (vf) vf.textContent = emotion.focus.toFixed(2);
+
+  // Weather: debounce label changes so the scene doesn't flicker
+  const incomingLabel = em.label || '';
+  if (incomingLabel && WEATHER_STATES[incomingLabel]) {
+    if (incomingLabel !== pendingWeatherLabel) {
+      pendingWeatherLabel = incomingLabel;
+      labelStableAt = performance.now();
+    } else if (
+      incomingLabel !== activeWeatherLabel &&
+      performance.now() - labelStableAt > LABEL_DEBOUNCE_MS
+    ) {
+      switchWeatherTo(incomingLabel);
+    }
+  }
+
+  applyEmotion();
+  updateMoodDisplay();
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Procedural natural objects
@@ -2436,6 +2861,224 @@ const PROCEDURAL_MAP = {
   },
 };
 
+// ── Placement autocomplete (datalist) + preview tab (mini Three view) ───────
+const PLACE_AUTOCOMPLETE_NAMES = [...new Set([...Object.keys(MODEL_MAP), ...Object.keys(PROCEDURAL_MAP)])].sort();
+(function fillPlaceDatalist() {
+  const dl = document.getElementById('place-object-datalist');
+  if (!dl) return;
+  const frag = document.createDocumentFragment();
+  for (const name of PLACE_AUTOCOMPLETE_NAMES) {
+    const o = document.createElement('option');
+    o.value = name;
+    frag.appendChild(o);
+  }
+  dl.appendChild(frag);
+})();
+
+updatePlaceSuggest = function updatePlaceSuggestImpl() {
+  const box = document.getElementById('object-suggest');
+  if (!box || !objectInput) return;
+  const val = objectInput.value;
+  const trimmedEnd = val.replace(/\s+$/, '');
+  let before = '';
+  let token = '';
+  const lastSpace = trimmedEnd.lastIndexOf(' ');
+  if (lastSpace === -1) {
+    token = trimmedEnd.toLowerCase();
+  } else {
+    before = trimmedEnd.slice(0, lastSpace + 1);
+    token = trimmedEnd.slice(lastSpace + 1).toLowerCase();
+  }
+  if (!token) {
+    box.style.display = 'none';
+    box.replaceChildren();
+    return;
+  }
+  const matches = PLACE_AUTOCOMPLETE_NAMES.filter(
+    (n) => n.startsWith(token) && n.length > token.length
+  ).slice(0, 12);
+  if (matches.length === 0) {
+    box.style.display = 'none';
+    box.replaceChildren();
+    return;
+  }
+  box.replaceChildren();
+  for (const name of matches) {
+    const row = document.createElement('div');
+    row.className = 'object-suggest-item';
+    row.setAttribute('role', 'option');
+    row.addEventListener('mousedown', (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      objectInput.value = before + name;
+      objectInput.dispatchEvent(new Event('input', { bubbles: true }));
+      box.style.display = 'none';
+      objectInput.focus();
+    });
+    const pre = document.createElement('span');
+    pre.className = 'object-suggest-prefix';
+    pre.textContent = name.slice(0, token.length);
+    const rest = document.createElement('span');
+    rest.textContent = name.slice(token.length);
+    row.appendChild(pre);
+    row.appendChild(rest);
+    box.appendChild(row);
+  }
+  box.style.display = 'block';
+};
+
+let placePreviewScene = null;
+let placePreviewCamera = null;
+let placePreviewRenderer = null;
+let placePreviewRoot = null;
+let placePreviewLoadGen = 0;
+let placePreviewTimer = null;
+
+function disposePlacePreviewRoot() {
+  if (!placePreviewScene || !placePreviewRoot) return;
+  placePreviewScene.remove(placePreviewRoot);
+  placePreviewRoot.traverse((child) => {
+    if (child.isMesh) {
+      child.geometry?.dispose?.();
+      const mats = Array.isArray(child.material) ? child.material : [child.material];
+      mats.forEach((m) => m?.dispose?.());
+    }
+  });
+  placePreviewRoot = null;
+}
+
+function centerPreviewModel(root) {
+  const box = new THREE.Box3().setFromObject(root);
+  const size = box.getSize(new THREE.Vector3());
+  const maxDim = Math.max(size.x, size.y, size.z, 0.01);
+  const s = 1.85 / maxDim;
+  root.scale.setScalar(s);
+  box.setFromObject(root);
+  const c = box.getCenter(new THREE.Vector3());
+  root.position.sub(c);
+  box.setFromObject(root);
+  root.position.y -= box.min.y;
+}
+
+function initPlacePreview() {
+  const canvas = document.getElementById('place-preview-canvas');
+  if (!canvas || placePreviewRenderer) return;
+  const w = canvas.width;
+  const h = canvas.height;
+  placePreviewScene = new THREE.Scene();
+  placePreviewScene.background = new THREE.Color(0xe8ecf4);
+  placePreviewCamera = new THREE.PerspectiveCamera(40, w / h, 0.06, 150);
+  placePreviewCamera.position.set(2.5, 1.55, 2.5);
+  placePreviewCamera.lookAt(0, 0.4, 0);
+  placePreviewRenderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+  placePreviewRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  placePreviewRenderer.setSize(w, h, false);
+  placePreviewScene.add(new THREE.AmbientLight(0xffffff, 0.65));
+  const d = new THREE.DirectionalLight(0xffffff, 0.92);
+  d.position.set(4, 6, 5);
+  placePreviewScene.add(d);
+  const grid = new THREE.GridHelper(5, 10, 0xc4c8d4, 0xdedee8);
+  grid.position.y = 0;
+  placePreviewScene.add(grid);
+}
+
+function runPlacePreviewFromInput(gen) {
+  initPlacePreview();
+  if (!placePreviewScene) return;
+  disposePlacePreviewRoot();
+  const st = document.getElementById('place-preview-status');
+  const raw = objectInput.value.trim();
+  if (!raw) {
+    if (st) st.textContent = 'Type a phrase in Search — base object name is parsed for preview.';
+    return;
+  }
+  const parsed = parseLabel(raw);
+  const key = parsed.base.trim().toLowerCase();
+  const procFn = PROCEDURAL_MAP[key];
+  if (procFn) {
+    try {
+      placePreviewRoot = procFn(new THREE.Vector3(0, 0, 0));
+      centerPreviewModel(placePreviewRoot);
+      placePreviewScene.add(placePreviewRoot);
+      if (st) st.textContent = `Procedural “${key}” — opens faster than GLB; place to add to scene.`;
+    } catch (err) {
+      if (st) st.textContent = 'Preview error — try another name.';
+      console.warn('[preview]', err);
+    }
+    return;
+  }
+  const file = MODEL_MAP[key];
+  if (file) {
+    if (st) st.textContent = 'Loading GLB…';
+    gltfLoader.load(
+      `/assets/${file}`,
+      (gltf) => {
+        if (gen !== placePreviewLoadGen || !popupOpen) return;
+        prepareBaseMaterials(gltf.scene);
+        placePreviewRoot = gltf.scene;
+        centerPreviewModel(placePreviewRoot);
+        placePreviewScene.add(placePreviewRoot);
+        if (st) st.textContent = `Asset: ${file.split('/').pop()} — tab Search to adjust tint/scale, then Place.`;
+      },
+      undefined,
+      () => {
+        if (gen !== placePreviewLoadGen) return;
+        if (st) st.textContent = 'Could not load model file.';
+      }
+    );
+  } else {
+    const box = new THREE.Mesh(
+      new THREE.BoxGeometry(0.45, 0.45, 0.45),
+      new THREE.MeshStandardMaterial({ color: 0x8a92a4, roughness: 0.85 })
+    );
+    placePreviewRoot = box;
+    centerPreviewModel(placePreviewRoot);
+    placePreviewScene.add(box);
+    if (st) st.textContent = `No kit match for “${key}” — place may use fallback geometry.`;
+  }
+}
+
+function schedulePlacePreviewRefresh() {
+  clearTimeout(placePreviewTimer);
+  placePreviewTimer = setTimeout(() => {
+    placePreviewLoadGen += 1;
+    runPlacePreviewFromInput(placePreviewLoadGen);
+  }, 280);
+}
+
+function renderPlacePreviewFrame() {
+  if (!placePreviewRenderer || !placePreviewScene || !placePreviewCamera) return;
+  if (placePreviewRoot) placePreviewRoot.rotation.y += 0.007;
+  placePreviewRenderer.render(placePreviewScene, placePreviewCamera);
+}
+
+function closePlacePreview() {
+  placePreviewLoadGen += 1;
+  clearTimeout(placePreviewTimer);
+  disposePlacePreviewRoot();
+  if (placePreviewRenderer) placePreviewRenderer.clear();
+}
+
+document.querySelectorAll('.popup-tab').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    const panel = btn.dataset.panel;
+    document.querySelectorAll('.popup-tab').forEach((b) => {
+      const on = b === btn;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    const ps = document.getElementById('popup-panel-search');
+    const pp = document.getElementById('popup-panel-preview');
+    if (ps) ps.style.display = panel === 'search' ? 'block' : 'none';
+    if (pp) pp.style.display = panel === 'preview' ? 'block' : 'none';
+    if (panel === 'preview') {
+      initPlacePreview();
+      placePreviewLoadGen += 1;
+      runPlacePreviewFromInput(placePreviewLoadGen);
+    }
+  });
+});
+
 // Main entry — routes to procedural or GLTF loader
 function placeObject(name, position, parsed = null) {
   // parsed may be a label-parsed object or null (called internally)
@@ -2479,12 +3122,15 @@ function animate() {
 
   controls.update();
 
+  syncEmotionFromEEG();
+  applyWeather(dt);
+
   updatePointerFollow(dt);
 
   grainPass.uniforms.time.value = t;
 
-  const pulse = Math.sin(t * (0.4 + emotion.arousal * 1.8)) * 0.05;
-  ambientLight.intensity = 0.58 + emotion.arousal * 0.22 + emotion.valence * 0.14 + pulse;
+  const pulse = Math.sin(t * (0.4 + emotion.arousal * 1.8)) * 0.03;
+  ambientLight.intensity = weatherCurrent.ambIntensity + pulse;
 
   // Key light stays locked to sky sun (same direction as Three.js Sky)
   dirLight.position.copy(sunPos).multiplyScalar(60);
@@ -2516,6 +3162,14 @@ function animate() {
     c.position.z += Math.cos(t * 0.04 + d) * 0.004;
   });
 
+  if (
+    popupOpen &&
+    document.getElementById('popup-panel-preview') &&
+    document.getElementById('popup-panel-preview').style.display !== 'none'
+  ) {
+    renderPlacePreviewFrame();
+  }
+
   composer.render();
 }
 
@@ -2524,6 +3178,7 @@ function animate() {
 // ═══════════════════════════════════════════════════════════════════════════
 window.addEventListener('beforeunload', () => {
   try { stopEyeGazeBridge(); } catch (_) { /* ignore */ }
+  try { stopEEGBridge(); } catch (_) { /* ignore */ }
 });
 
 applySkyParams();   // initialise sunPos + sky uniforms before first render

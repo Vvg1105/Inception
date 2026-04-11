@@ -33,3 +33,6 @@ outputs/
 .pytest_cache/
 .coverage
 htmlcov/
+
+# MediaPipe model (downloaded at runtime)
+*.task

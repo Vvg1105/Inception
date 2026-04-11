@@ -25,13 +25,20 @@ export function createPointerGroundFollow({ scene, camera, ground, raycaster, ca
 
   /** Ground position frozen while blink-hold is active. */
   let blinkHoldPos = null;
-  /** Previous frame had blink-hold engaged (for edge events). */
-  let prevBlinkHold = false;
+  /** Ground position frozen while world / place UI is open (so gaze doesn’t drag the cursor under panels). */
+  let uiPanelHoldPos = null;
+  /** Previous frame: eyes closed per blink source (for dream-blink-* edges; independent of pause-cursor). */
+  let prevBlinkSignal = false;
   let lastBlinkSourceForEvent = 'camera';
+
+  function shouldFreezeCursorForHtmlPanels() {
+    const pop = document.getElementById('popup');
+    return !!(pop && pop.style.display === 'block');
+  }
 
   function readBlinkPauseEnabled() {
     const el = document.getElementById('blink-pause-cursor');
-    return el ? el.checked : false;
+    return el ? !!el.value : false;
   }
 
   function readBlinkSourceMode() {
@@ -66,50 +73,20 @@ export function createPointerGroundFollow({ scene, camera, ground, raycaster, ca
     return 'camera';
   }
 
-  canvas.addEventListener('mousemove', (e) => {
+  function onMouseMove(e) {
     pointerNDC.x = (e.clientX / window.innerWidth) * 2 - 1;
     pointerNDC.y = -(e.clientY / window.innerHeight) * 2 + 1;
-  });
+  }
+  canvas.addEventListener('mousemove', onMouseMove);
+  window.addEventListener('mousemove', onMouseMove);
 
   function updatePointerFollow(dt) {
     const pauseOn = readBlinkPauseEnabled();
-    const blinkNow = pauseOn && resolveBlinkingHold();
+    const blinkSignal = resolveBlinkingHold();
 
-    if (pauseOn) {
-      if (!prevBlinkHold && blinkNow) {
-        lastBlinkSourceForEvent = activeBlinkSignalLabel();
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(
-            new CustomEvent('dream-blink-down', { detail: { source: lastBlinkSourceForEvent } })
-          );
-        }
-      }
-      if (prevBlinkHold && !blinkNow) {
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(
-            new CustomEvent('dream-blink-up', { detail: { source: lastBlinkSourceForEvent } })
-          );
-        }
-      }
-    }
-    prevBlinkHold = !!blinkNow;
-    if (!pauseOn) prevBlinkHold = false;
-
-    if (blinkNow) {
-      if (!blinkHoldPos && cursorGroundReady) {
-        blinkHoldPos = cursorGroundSmooth.clone();
-      }
-      if (blinkHoldPos) {
-        cursorLight.position.set(blinkHoldPos.x, 0.6, blinkHoldPos.z);
-        cursorDisc.position.set(blinkHoldPos.x, 0.003, blinkHoldPos.z);
-      }
-      return;
-    }
-    blinkHoldPos = null;
-
+    // Always blend mouse + gaze first so dream-blink-up sees the same aim as the cursor would.
     ndcBlended.copy(pointerNDC);
     const gz = typeof window !== 'undefined' ? window.__dreamGaze : null;
-    // Blend when gaze NDC is valid; do not require gz.active (avoids flicker when gaze drops frames).
     if (gz && Number.isFinite(gz.x) && Number.isFinite(gz.y)) {
       const mix = gz.mix != null ? gz.mix : 0.78;
       ndcBlended.x = THREE.MathUtils.lerp(ndcBlended.x, gz.x, mix);
@@ -125,6 +102,50 @@ export function createPointerGroundFollow({ scene, camera, ground, raycaster, ca
     }
     ndcBlended.x = THREE.MathUtils.clamp(ndcBlended.x, -1.4, 1.4);
     ndcBlended.y = THREE.MathUtils.clamp(ndcBlended.y, -1.4, 1.4);
+
+    // Blink edges: used for build popup etc. Must not require "pause cursor on blink".
+    if (!prevBlinkSignal && blinkSignal) {
+      lastBlinkSourceForEvent = activeBlinkSignalLabel();
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('dream-blink-down', { detail: { source: lastBlinkSourceForEvent } })
+        );
+      }
+    }
+    if (prevBlinkSignal && !blinkSignal) {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('dream-blink-up', { detail: { source: lastBlinkSourceForEvent } })
+        );
+      }
+    }
+    prevBlinkSignal = !!blinkSignal;
+
+    const cursorHold = pauseOn && blinkSignal;
+    if (cursorHold) {
+      if (!blinkHoldPos && cursorGroundReady) {
+        blinkHoldPos = cursorGroundSmooth.clone();
+      }
+      if (blinkHoldPos) {
+        cursorLight.position.set(blinkHoldPos.x, 0.6, blinkHoldPos.z);
+        cursorDisc.position.set(blinkHoldPos.x, 0.003, blinkHoldPos.z);
+      }
+      return;
+    }
+    blinkHoldPos = null;
+
+    const uiBlocks = shouldFreezeCursorForHtmlPanels();
+    if (uiBlocks) {
+      if (!uiPanelHoldPos && cursorGroundReady) {
+        uiPanelHoldPos = cursorGroundSmooth.clone();
+      }
+      if (uiPanelHoldPos) {
+        cursorLight.position.set(uiPanelHoldPos.x, 0.6, uiPanelHoldPos.z);
+        cursorDisc.position.set(uiPanelHoldPos.x, 0.003, uiPanelHoldPos.z);
+      }
+      return;
+    }
+    uiPanelHoldPos = null;
 
     raycaster.setFromCamera(ndcBlended, camera);
     const hits = raycaster.intersectObject(ground, false);
@@ -143,10 +164,15 @@ export function createPointerGroundFollow({ scene, camera, ground, raycaster, ca
     cursorDisc.position.set(cursorGroundSmooth.x, 0.003, cursorGroundSmooth.z);
   }
 
+  function getBlendedNdc() {
+    return ndcBlended.clone();
+  }
+
   return {
     cursorLight,
     cursorDisc,
     updatePointerFollow,
     pointerNDC,
+    getBlendedNdc,
   };
 }
