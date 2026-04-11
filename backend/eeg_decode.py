@@ -14,6 +14,8 @@ Run:
   python backend/eeg_decode.py              # real hardware (g.tec BCICore-8)
   python backend/eeg_decode.py --mock       # fake sine-wave data for testing
   python backend/eeg_decode.py --port 8765  # custom port
+
+  RUN "ls -l /dev/cu.* /dev/tty.*" IN TERMINAL TO FIND CORRECT SERIAL PORT FOR CYTON
 """
 from __future__ import annotations
 
