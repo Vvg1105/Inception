@@ -34,6 +34,7 @@ hf_cache/
 
 # Pipeline outputs and resume shards
 outputs/
+!outputs/photo_element_logreg.joblib
 **/*_row_cache/
 
 # Still-image → TRIBE: regenerated MP4s (large)
