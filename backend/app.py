@@ -96,6 +96,9 @@ class VisionClassifyResponse(BaseModel):
     confidence: float
     probabilities: dict[str, float]
     narration: str
+    #: Mean-pooled TRIBE video embedding — one value per TRIBE vertex (often ~10k–25k dims).
+    tribe_embedding: list[float] = Field(default_factory=list)
+    tribe_dim: int = 0
 
 
 # ── Local heuristic (same idea as `buildLocalParams` in index.html) ──────────
@@ -285,7 +288,7 @@ def vision_classify(req: VisionClassifyRequest) -> VisionClassifyResponse:
         ) from exc
 
     try:
-        classified, place_key, confidence, probs = run_vision_classify(
+        classified, place_key, confidence, probs, tribe_pooled = run_vision_classify(
             prompt=req.prompt.strip(),
             api_key=api_key,
             bfl_model=os.getenv("BFL_MODEL", "flux-2-klein-4b"),
@@ -300,12 +303,15 @@ def vision_classify(req: VisionClassifyRequest) -> VisionClassifyResponse:
 
     snippet = req.prompt.strip()[:72]
     narration = f"Vision: {classified} ({confidence:.0%}) — {snippet}"
+    emb = tribe_pooled.astype(float, copy=False).tolist()
     return VisionClassifyResponse(
         classified_label=classified,
         place_key=place_key,
         confidence=confidence,
         probabilities=probs,
         narration=narration,
+        tribe_embedding=emb,
+        tribe_dim=len(emb),
     )
 
 

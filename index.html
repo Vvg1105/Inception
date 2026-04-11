@@ -246,12 +246,67 @@
       background: #888; border-radius: 50%; cursor: pointer;
     }
 
-    /* object list */
+    /* object list + TRIBE brain readout (bottom bar) */
     #obj-panel { flex: 1; min-width: 0; padding-top: 2px; }
     #obj-title  { font-size: 8px; letter-spacing: 0.2em; text-transform: uppercase; color: #ccc; margin-bottom: 7px; }
     #obj-tags   { display: flex; flex-wrap: wrap; gap: 5px; }
     .obj-tag    { font-size: 9px; letter-spacing: 0.06em; color: #999; border: 1px solid #ddd; padding: 2px 8px; border-radius: 2px; }
     #obj-empty  { font-size: 9px; color: #ddd; }
+
+    #tribe-brain-panel {
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid #e6e8f0;
+      display: none;
+    }
+    #tribe-brain-panel.tribe-brain-visible { display: block; }
+    .tribe-brain-head {
+      font-size: 7px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: #aab;
+      margin-bottom: 8px;
+    }
+    .tribe-brain-layout {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      gap: 14px;
+    }
+    #tribe-brain-canvas { display: none; }
+    #tribe-brain-img {
+      width: min(300px, 46vw);
+      height: auto;
+      border-radius: 6px;
+      border: 1px solid #dde0ea;
+      background: #fff;
+      box-shadow: 0 2px 12px rgba(40, 50, 80, 0.08);
+      vertical-align: top;
+    }
+    #tribe-brain-legend {
+      flex: 1;
+      min-width: 140px;
+      font-size: 9px;
+      line-height: 1.45;
+      color: #667;
+    }
+    #tribe-brain-legend .tb-row { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 3px; }
+    #tribe-brain-legend .tb-bar {
+      height: 4px;
+      border-radius: 2px;
+      background: linear-gradient(90deg, #c8d4e8, #6688aa);
+      margin-top: 2px;
+      max-width: 120px;
+    }
+    .tribe-brain-foot {
+      margin-top: 8px;
+      font-size: 6px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #bbb;
+      line-height: 1.4;
+      max-width: 520px;
+    }
 
     /* loader */
     #loader {
@@ -393,103 +448,6 @@
       letter-spacing: 0.18em;
       text-transform: uppercase;
       color: #aab;
-    }
-
-    /* Brain “activation” popup — anchored to placement point in the scene */
-    #brain-activation-popup {
-      position: fixed;
-      z-index: 251;
-      left: 50%;
-      top: 28%;
-      width: min(220px, 42vw);
-      pointer-events: none;
-      transform: translate(-50%, calc(-100% - 14px));
-      opacity: 0;
-      transition: opacity 0.2s ease;
-    }
-    #brain-activation-popup.brain-on {
-      opacity: 1;
-    }
-    .brain-popup-inner {
-      cursor: default;
-      padding: 10px 12px 12px;
-      border-radius: 10px;
-      border: 1px solid rgba(102, 136, 170, 0.45);
-      background: rgba(255, 255, 255, 0.96);
-      box-shadow: 0 10px 36px rgba(40, 55, 90, 0.2);
-      animation: brainPopupIn 0.3s ease-out;
-    }
-    @keyframes brainPopupIn {
-      from { opacity: 0; transform: translateY(6px) scale(0.96); }
-      to { opacity: 1; transform: translateY(0) scale(1); }
-    }
-    .brain-popup-kicker {
-      font-size: 7px;
-      letter-spacing: 0.22em;
-      text-transform: uppercase;
-      color: #99aabb;
-      margin-bottom: 6px;
-    }
-    .brain-svg {
-      display: block;
-      width: 100%;
-      height: auto;
-      max-height: 118px;
-    }
-    .brain-silhouette {
-      fill: #e8eef6;
-      stroke: rgba(102, 136, 170, 0.55);
-      stroke-width: 1.2;
-    }
-    .brain-region {
-      fill: rgba(102, 136, 170, 0.12);
-      stroke: rgba(102, 136, 170, 0.35);
-      stroke-width: 0.9;
-      transition: fill 0.35s ease, stroke 0.35s ease, filter 0.35s ease;
-    }
-    .brain-region.is-active {
-      fill: url(#brainRegionHotFill);
-      stroke: rgba(60, 90, 140, 0.85);
-      animation: brainRegionPulse 1.25s ease-in-out infinite;
-    }
-    .brain-region.is-active.weak {
-      animation-duration: 1.65s;
-    }
-    @keyframes brainRegionPulse {
-      0%, 100% { opacity: 0.82; filter: drop-shadow(0 0 3px rgba(100, 140, 200, 0.45)); }
-      50% { opacity: 1; filter: drop-shadow(0 0 10px rgba(100, 140, 200, 0.9)); }
-    }
-    .brain-region-chips {
-      list-style: none;
-      margin: 8px 0 0;
-      padding: 0;
-      display: flex;
-      flex-wrap: wrap;
-      gap: 4px 6px;
-      justify-content: center;
-    }
-    .brain-region-chips li {
-      font-size: 8px;
-      letter-spacing: 0.06em;
-      color: #556677;
-      padding: 2px 6px;
-      border-radius: 4px;
-      background: rgba(102, 136, 170, 0.12);
-      border: 1px solid rgba(102, 136, 170, 0.2);
-    }
-    .brain-region-chips li.is-hot {
-      background: rgba(100, 140, 200, 0.22);
-      border-color: rgba(80, 120, 180, 0.45);
-      color: #334455;
-    }
-    .brain-popup-foot {
-      margin-top: 8px;
-      font-size: 6px;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      color: #aab;
-      text-align: center;
-      line-height: 1.35;
     }
 
     /* ── Narration ─────────────────────────────────────────────────────── */
@@ -768,6 +726,15 @@
     <div id="obj-tags">
       <span id="obj-empty">— empty —</span>
     </div>
+    <div id="tribe-brain-panel" hidden>
+      <div class="tribe-brain-head">TRIBE pooled embedding — each dim mapped to a site on an illustrative 3D brain</div>
+      <div class="tribe-brain-layout">
+        <canvas id="tribe-brain-canvas" width="360" height="220" aria-hidden="true"></canvas>
+        <img id="tribe-brain-img" alt="" width="360" height="220" />
+        <div id="tribe-brain-legend"></div>
+      </div>
+      <p class="tribe-brain-foot">Sites are TRIBE model vertices (activation scalars), laid on a brain-shaped scaffold for display — not registered to real anatomy.</p>
+    </div>
   </div>
 </div>
 
@@ -792,31 +759,6 @@
     <div id="neural-pipeline-phase">Imagining…</div>
     <div id="neural-pipeline-prompt"></div>
     <div id="neural-pipeline-hint">synthesizing · encoding · cortical readout</div>
-  </div>
-</div>
-
-<div id="brain-activation-popup" role="img" aria-label="Illustrative brain region activity" hidden>
-  <div class="brain-popup-inner">
-    <div class="brain-popup-kicker">cortical readout · your description</div>
-    <svg class="brain-svg" viewBox="0 0 120 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-      <defs>
-        <radialGradient id="brainRegionHotFill" cx="35%" cy="35%" r="65%">
-          <stop offset="0%" stop-color="#b8d0f0"/>
-          <stop offset="55%" stop-color="#6a8cc8"/>
-          <stop offset="100%" stop-color="#3d5a88"/>
-        </radialGradient>
-      </defs>
-      <path class="brain-silhouette" d="M14,52 C12,28 32,14 48,17 C54,10 70,10 78,18 C92,16 105,28 106,46 C107,64 96,82 76,88 C58,94 36,90 24,76 C16,66 14,58 14,52 Z"/>
-      <g class="brain-hotspots">
-        <circle class="brain-region" data-region="frontal" cx="38" cy="36" r="11"/>
-        <circle class="brain-region" data-region="parietal" cx="54" cy="30" r="9"/>
-        <circle class="brain-region" data-region="occipital" cx="90" cy="48" r="11"/>
-        <circle class="brain-region" data-region="temporal" cx="60" cy="60" r="12"/>
-        <circle class="brain-region" data-region="limbic" cx="52" cy="46" r="7"/>
-      </g>
-    </svg>
-    <ul class="brain-region-chips" id="brain-region-chips"></ul>
-    <p class="brain-popup-foot">illustrative · from prompt &amp; scene — not clinical imaging</p>
   </div>
 </div>
 
@@ -1540,129 +1482,220 @@ const loaderEl = document.getElementById('loader');
 const neuralOverlay = document.getElementById('neural-pipeline-overlay');
 const neuralPhaseEl = document.getElementById('neural-pipeline-phase');
 const neuralPromptEl = document.getElementById('neural-pipeline-prompt');
-const brainPopupEl = document.getElementById('brain-activation-popup');
-const brainChipsEl = document.getElementById('brain-region-chips');
+const tribeBrainPanel = document.getElementById('tribe-brain-panel');
+const tribeBrainCanvas = document.getElementById('tribe-brain-canvas');
+const tribeBrainImg = document.getElementById('tribe-brain-img');
+const tribeBrainLegend = document.getElementById('tribe-brain-legend');
 let neuralPhaseTimer = null;
-/** @type {THREE.Vector3|null} World anchor for brain popup while vision runs */
-let neuralWorldAnchor = null;
 
-const BRAIN_REGION_LABELS = {
-  occipital: 'Occipital · visual',
-  temporal: 'Temporal · objects & meaning',
-  parietal: 'Parietal · space & scale',
-  frontal: 'Frontal · intent & naming',
-  limbic: 'Limbic · affect',
-};
-
-const BRAIN_LEXICON = {
-  occipital: /\b(red|blue|green|yellow|orange|purple|pink|gold|bright|dark|dim|glow|neon|sky|sun|moon|light|shadow|color|chrome|glass|shiny|matte)\b/i,
-  temporal: /\b(person|people|face|car|truck|bus|train|building|house|tree|dog|cat|bird|sign|door|window|object|thing|bench|tower|bridge)\b/i,
-  parietal: /\b(big|small|tiny|huge|tall|wide|narrow|high|low|near|far|above|below|behind|front|side|corner|center|middle|space|next|between)\b/i,
-  frontal: /\b(place|put|add|make|build|want|need|imagine|think|dream|choose|pick|describe)\b/i,
-  limbic: /\b(happy|sad|love|hate|fear|angry|calm|wild|peace|warm|cold|cozy|lonely|joy|mood|feel)\b/i,
-};
-
-function hashPromptInt32(text) {
-  let h = 2166136261;
-  const s = String(text || '');
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return h | 0;
+function hideTribeBrainPanel() {
+  if (!tribeBrainPanel) return;
+  tribeBrainPanel.classList.remove('tribe-brain-visible');
+  tribeBrainPanel.setAttribute('hidden', '');
 }
 
-function deriveBrainActivations(promptText) {
-  const p = String(promptText || '').toLowerCase();
-  const h = hashPromptInt32(promptText);
-  const pick = (shift) => ((Math.abs(h) >>> shift) & 7) / 7;
+function tbEscapeHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
 
-  const arousal = typeof emotion?.arousal === 'number' ? emotion.arousal : 0.5;
-  const valence = typeof emotion?.valence === 'number' ? emotion.valence : 0.5;
-  const limbicFromMood = arousal > 0.62 || valence < 0.35 || valence > 0.65;
-
-  const out = {
-    occipital: { score: 0.92 + pick(0) * 0.08, on: true },
-    temporal: { score: (BRAIN_LEXICON.temporal.test(p) ? 0.78 : 0.35) + pick(4) * 0.22, on: false },
-    parietal: { score: (BRAIN_LEXICON.parietal.test(p) ? 0.72 : 0.32) + pick(8) * 0.2, on: false },
-    frontal: { score: (BRAIN_LEXICON.frontal.test(p) ? 0.75 : 0.45) + pick(12) * 0.25, on: false },
-    limbic: { score: (BRAIN_LEXICON.limbic.test(p) || limbicFromMood ? 0.7 : 0.28) + pick(16) * 0.2, on: false },
-  };
-
-  out.temporal.on = out.temporal.score >= 0.52;
-  out.parietal.on = out.parietal.score >= 0.5;
-  out.frontal.on = out.frontal.score >= 0.48;
-  out.limbic.on = out.limbic.score >= 0.48;
-
-  let onCount = Object.keys(out).filter((k) => out[k].on).length;
-  while (onCount < 3) {
-    const pool = ['temporal', 'parietal', 'frontal', 'limbic'].filter((k) => !out[k].on);
-    if (!pool.length) break;
-    pool.sort((a, b) => out[b].score - out[a].score);
-    const k = pool[0];
-    out[k].on = true;
-    out[k].score = Math.max(out[k].score, 0.55);
-    onCount += 1;
+/** One TRIBE vertex index → fixed point on a Fibonacci ellipsoid (brain-shaped scaffold). */
+function fibonacciEllipsoidSites(n, ax, ay, az) {
+  const out = new Array(n);
+  const golden = (1 + Math.sqrt(5)) / 2;
+  for (let i = 0; i < n; i++) {
+    const t = (i + 0.5) / n;
+    const phi = Math.acos(1 - 2 * t);
+    const theta = (2 * Math.PI * i) / golden;
+    const sp = Math.sin(phi);
+    out[i] = {
+      x: ax * sp * Math.cos(theta),
+      y: ay * Math.cos(phi),
+      z: az * sp * Math.sin(theta),
+    };
   }
-
   return out;
 }
 
-function applyBrainActivationUI(promptText) {
-  if (!brainPopupEl) return;
-  const act = deriveBrainActivations(promptText);
-  brainPopupEl.querySelectorAll('.brain-region[data-region]').forEach((el) => {
-    const key = el.getAttribute('data-region');
-    const a = act[key];
-    el.classList.remove('is-active', 'weak');
-    if (a && a.on) {
-      el.classList.add('is-active');
-      if (a.score < 0.58) el.classList.add('weak');
-    }
-  });
-
-  if (brainChipsEl) {
-    const rows = Object.entries(act)
-      .filter(([, v]) => v.on)
-      .sort((a, b) => b[1].score - a[1].score)
-      .map(([k, v]) => {
-        const cls = v.score >= 0.65 ? ' class="is-hot"' : '';
-        return `<li${cls}>${BRAIN_REGION_LABELS[k] || k}</li>`;
-      });
-    brainChipsEl.innerHTML = rows.join('') || '<li>Occipital · visual</li>';
-  }
+function rotateYawPitch(x, y, z, yaw, pitch) {
+  const cy = Math.cos(yaw);
+  const sy = Math.sin(yaw);
+  const x1 = cy * x + sy * z;
+  const z1 = -sy * x + cy * z;
+  const cp = Math.cos(pitch);
+  const sp = Math.sin(pitch);
+  const y2 = cp * y - sp * z1;
+  const z2 = sp * y + cp * z1;
+  return { x: x1, y: y2, z: z2 };
 }
 
-function updateBrainPopupScreenPosition() {
-  if (!brainPopupEl || brainPopupEl.hasAttribute('hidden') || !neuralWorldAnchor || !canvas) return;
+function embeddingPercentileBounds(samples, loQ, hiQ) {
+  const n = samples.length;
+  if (!n) return { lo: 0, hi: 1 };
+  const s = [...samples].sort((a, b) => a - b);
+  const lo = s[Math.min(n - 1, Math.max(0, Math.floor(loQ * (n - 1))))];
+  const hi = s[Math.min(n - 1, Math.max(0, Math.ceil(hiQ * (n - 1))))];
+  if (hi <= lo + 1e-12) return { lo: lo - 1, hi: lo + 1 };
+  return { lo, hi };
+}
 
-  const w = neuralWorldAnchor.clone();
-  w.y += 0.5;
-  w.project(camera);
+function activationHeatColor(t) {
+  const u = Math.max(0, Math.min(1, t));
+  const h = (1 - u) * 0.78;
+  const s = 72 + u * 24;
+  const l = 30 + u * 32;
+  return `hsl(${Math.round(h * 360)}, ${Math.round(s)}%, ${Math.round(l)}%)`;
+}
 
-  const rect = canvas.getBoundingClientRect();
-  const onScreen =
-    w.z >= -1 &&
-    w.z <= 1 &&
-    Math.abs(w.x) <= 1.15 &&
-    Math.abs(w.y) <= 1.15;
+/**
+ * Paint each TRIBE pooled scalar as a colored site on a tilted 3D ellipsoid; export as PNG via canvas.
+ */
+function drawTribeEmbeddingBrain3D(ctx, W, H, embedding, meta) {
+  const nFull = embedding.length;
+  const MAX_SITES = 48000;
+  let step = 1;
+  if (nFull > MAX_SITES) step = Math.ceil(nFull / MAX_SITES);
 
-  let x = rect.left + (w.x * 0.5 + 0.5) * rect.width;
-  let y = rect.top + (-w.y * 0.5 + 0.5) * rect.height;
+  ctx.clearRect(0, 0, W, H);
+  const bg = ctx.createLinearGradient(0, 0, W, H);
+  bg.addColorStop(0, '#0f121c');
+  bg.addColorStop(1, '#1a2235');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
 
-  if (!onScreen || !Number.isFinite(x) || !Number.isFinite(y)) {
-    x = rect.left + rect.width * 0.5;
-    y = rect.top + rect.height * 0.26;
+  if (!nFull) {
+    ctx.fillStyle = '#8899aa';
+    ctx.font = '11px system-ui, -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('No TRIBE embedding in response', W / 2, H / 2);
+    return { lo: 0, hi: 1, nDrawn: 0, nFull: 0, step };
   }
 
-  const pad = 16;
-  const estW = Math.min(220, rect.width * 0.42);
-  const estH = 200;
-  x = Math.min(rect.right - pad - estW * 0.5, Math.max(rect.left + pad + estW * 0.5, x));
-  y = Math.min(rect.bottom - pad, Math.max(rect.top + pad + estH, y));
+  const sampleVals = [];
+  for (let i = 0; i < nFull; i += step) sampleVals.push(embedding[i]);
+  const { lo, hi } = embeddingPercentileBounds(sampleVals, 0.03, 0.97);
 
-  brainPopupEl.style.left = `${x}px`;
-  brainPopupEl.style.top = `${y}px`;
+  const sites = fibonacciEllipsoidSites(nFull, 1.05, 0.88, 0.7);
+  const yaw = 0.62;
+  const pitch = -0.38;
+  const f = 165;
+  const worldScale = Math.min(W, H) * 0.42;
+
+  const items = [];
+  for (let i = 0; i < nFull; i += step) {
+    const p = sites[i];
+    const r = rotateYawPitch(p.x, p.y, p.z, yaw, pitch);
+    const depth = r.z + 2.4;
+    const sc = f / depth;
+    const sx = W * 0.5 + r.x * sc * worldScale;
+    const sy = H * 0.5 - r.y * sc * worldScale;
+    const v = embedding[i];
+    const t = (v - lo) / (hi - lo);
+    items.push({ sx, sy, z: r.z, t });
+  }
+  items.sort((a, b) => a.z - b.z);
+
+  for (const it of items) {
+    const depthScale = f / (it.z + 2.4);
+    const dotR = 0.5 + 0.55 * Math.min(1.15, depthScale * 0.22);
+    ctx.fillStyle = activationHeatColor(it.t);
+    ctx.globalAlpha = 0.78;
+    ctx.beginPath();
+    ctx.arc(it.sx, it.sy, dotR, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  ctx.strokeStyle = 'rgba(180, 200, 240, 0.14)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.ellipse(W * 0.5, H * 0.52, W * 0.36, H * 0.4, 0, 0, Math.PI * 2);
+  ctx.stroke();
+
+  ctx.fillStyle = '#c5d0e8';
+  ctx.font = '600 9px system-ui, -apple-system, sans-serif';
+  ctx.textAlign = 'center';
+  const lbl = meta.classified_label || '?';
+  const conf = typeof meta.confidence === 'number' ? `${(meta.confidence * 100).toFixed(0)}%` : '—';
+  const sub = step > 1 ? ` · draw ${step}× stride` : '';
+  ctx.fillText(`${lbl} · ${conf} · ${nFull.toLocaleString()} sites${sub}`, W / 2, H - 22);
+  ctx.font = '8px system-ui, -apple-system, sans-serif';
+  ctx.fillStyle = '#8a9aaf';
+  const snip = String(meta.promptSnippet || '').trim();
+  const short = snip.length > 48 ? `${snip.slice(0, 46)}…` : snip;
+  if (short) ctx.fillText(`“${short}”`, W / 2, H - 8);
+
+  return { lo, hi, nDrawn: items.length, nFull, step };
+}
+
+function showTribeBrainPanelFromVision(visionJson, promptText) {
+  if (!tribeBrainCanvas || !tribeBrainImg || !tribeBrainPanel) return;
+
+  const rawEmb = visionJson.tribe_embedding;
+  const embedding = Array.isArray(rawEmb) ? rawEmb.map((x) => Number(x)) : [];
+
+  const logicalW = 360;
+  const logicalH = 220;
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  tribeBrainCanvas.width = Math.round(logicalW * dpr);
+  tribeBrainCanvas.height = Math.round(logicalH * dpr);
+  tribeBrainCanvas.style.width = `${logicalW}px`;
+  tribeBrainCanvas.style.height = `${logicalH}px`;
+
+  const ctx = tribeBrainCanvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  const stats = drawTribeEmbeddingBrain3D(ctx, logicalW, logicalH, embedding, {
+    classified_label: visionJson.classified_label,
+    confidence: visionJson.confidence,
+    promptSnippet: promptText,
+  });
+
+  tribeBrainImg.src = tribeBrainCanvas.toDataURL('image/png');
+  const dim = visionJson.tribe_dim || embedding.length;
+  const cp = typeof visionJson.confidence === 'number' ? (visionJson.confidence * 100).toFixed(0) : '?';
+  tribeBrainImg.alt = `TRIBE ${dim} vertex activities on illustrative 3D brain — ${visionJson.classified_label} (${cp}%)`;
+
+  if (tribeBrainLegend) {
+    const probs = visionJson.probabilities && typeof visionJson.probabilities === 'object'
+      ? Object.entries(visionJson.probabilities)
+      : [];
+    probs.sort((a, b) => b[1] - a[1]);
+    const topP = probs.slice(0, 6);
+    const clsBlock = topP.length
+      ? topP.map(([name, p]) => {
+          const pct = (p * 100).toFixed(1);
+          const bw = Math.max(8, Math.round(p * 100));
+          return `<div class="tb-row"><span>${tbEscapeHtml(name)}</span><span>${pct}%</span></div><div class="tb-bar" style="width:${bw}px"></div>`;
+        }).join('')
+      : '<span>—</span>';
+
+    let vtxBlock = '<span>—</span>';
+    if (embedding.length) {
+      const idxed = embedding.map((v, i) => ({ i, v }));
+      idxed.sort((a, b) => b.v - a.v);
+      const topV = idxed.slice(0, 5);
+      const botV = idxed.slice(-3).reverse();
+      const rows = [
+        ...topV.map(({ i, v }) => `<div class="tb-row"><span>vertex ${i}</span><span>${v.toPrecision(4)}</span></div>`),
+        ...botV.map(({ i, v }) => `<div class="tb-row"><span>vertex ${i}</span><span>${v.toPrecision(4)}</span></div>`),
+      ];
+      vtxBlock = rows.join('');
+    }
+
+    tribeBrainLegend.innerHTML =
+      `<div style="font-weight:600;color:#445;margin-bottom:4px">TRIBE pooled vector</div>`
+      + `<div style="font-size:8px;color:#778;margin-bottom:8px">${dim.toLocaleString()} dimensions · color = activation (3–97%ile) · 3D = display scaffold only</div>`
+      + `<div style="font-size:8px;color:#556;margin-bottom:6px">Drawn: ${stats.nDrawn.toLocaleString()} of ${stats.nFull.toLocaleString()}${stats.step > 1 ? ` (stride ${stats.step})` : ''} · range [${stats.lo?.toPrecision(4)}, ${stats.hi?.toPrecision(4)}]</div>`
+      + `<div style="font-weight:600;color:#445;margin-bottom:4px">Strongest / weakest vertices</div>${vtxBlock}`
+      + `<div style="margin-top:10px;font-weight:600;color:#445">Classifier (placement only)</div>${clsBlock}`;
+  }
+
+  tribeBrainPanel.classList.add('tribe-brain-visible');
+  tribeBrainPanel.removeAttribute('hidden');
 }
 
 const NEURAL_PHASE_MESSAGES = [
@@ -1673,9 +1706,9 @@ const NEURAL_PHASE_MESSAGES = [
   'Decoding neural class probabilities…',
 ];
 
-function showNeuralPipelineUI(promptText, worldPos) {
+function showNeuralPipelineUI(promptText) {
   if (!neuralOverlay || !neuralPhaseEl) return;
-  neuralWorldAnchor = worldPos && worldPos.clone ? worldPos.clone() : null;
+  hideTribeBrainPanel();
   if (neuralPromptEl) {
     const s = (promptText || '').trim();
     neuralPromptEl.textContent = s
@@ -1692,13 +1725,6 @@ function showNeuralPipelineUI(promptText, worldPos) {
   neuralOverlay.classList.add('neural-on');
   neuralOverlay.removeAttribute('hidden');
   neuralOverlay.setAttribute('aria-busy', 'true');
-
-  applyBrainActivationUI(promptText);
-  if (brainPopupEl) {
-    brainPopupEl.classList.add('brain-on');
-    brainPopupEl.removeAttribute('hidden');
-    updateBrainPopupScreenPosition();
-  }
 }
 
 function hideNeuralPipelineUI() {
@@ -1706,15 +1732,10 @@ function hideNeuralPipelineUI() {
     clearInterval(neuralPhaseTimer);
     neuralPhaseTimer = null;
   }
-  neuralWorldAnchor = null;
   if (neuralOverlay) {
     neuralOverlay.classList.remove('neural-on');
     neuralOverlay.setAttribute('hidden', '');
     neuralOverlay.setAttribute('aria-busy', 'false');
-  }
-  if (brainPopupEl) {
-    brainPopupEl.classList.remove('brain-on');
-    brainPopupEl.setAttribute('hidden', '');
   }
 }
 
@@ -1950,7 +1971,7 @@ placeBtn.addEventListener('click', async () => {
 
   const useVision = document.getElementById('vision-place')?.checked ?? false;
   if (useVision && backendOnline) {
-    showNeuralPipelineUI(raw, pos);
+    showNeuralPipelineUI(raw);
     try {
       const ctrl = new AbortController();
       const t = setTimeout(() => ctrl.abort(), 600000);
@@ -1975,6 +1996,8 @@ placeBtn.addEventListener('click', async () => {
       if (res.ok) {
         const v = await res.json();
         parsed.base = v.place_key;
+        hideNeuralPipelineUI();
+        showTribeBrainPanelFromVision(v, raw);
         if (v.narration) showNarration(v.narration);
         placeObject(`${v.classified_label}: ${raw}`, pos, parsed);
         return;
@@ -3710,8 +3733,6 @@ function animate() {
   ) {
     renderPlacePreviewFrame();
   }
-
-  updateBrainPopupScreenPosition();
 
   composer.render();
 }

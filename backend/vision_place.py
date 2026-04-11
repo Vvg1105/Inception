@@ -81,8 +81,12 @@ def run_vision_classify(
     duration_sec: float = 5.0,
     fps: int = 24,
     cache_folder: str | None = None,
-) -> tuple[str, str, float, dict[str, float]]:
-    """Return ``(classified_label, place_key, confidence, probabilities)``."""
+) -> tuple[str, str, float, dict[str, float], np.ndarray]:
+    """Return ``(classified_label, place_key, confidence, probabilities, tribe_pooled)``.
+
+    ``tribe_pooled`` is the mean-pooled TRIBE prediction vector ``(n_vertices,)`` (one scalar
+    per model vertex / activation site), same vector fed to the element classifier.
+    """
     from pipeline.bfl_api import bfl_generate_image_bytes
     from pipeline.photo_neural_matrix import _check_ffmpeg, image_to_looped_mp4
     from tribe.model import predict_from_video_pooled
@@ -137,6 +141,7 @@ def run_vision_classify(
         confidence = float(proba[idx])
         probs = {names[i]: float(proba[i]) for i in range(len(names))}
         place_key = CLASSIFIER_TO_PLACE_KEY.get(classified, classified)
-        return classified, place_key, confidence, probs
+        pooled_out = np.asarray(pooled, dtype=np.float32).reshape(-1).copy()
+        return classified, place_key, confidence, probs, pooled_out
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
