@@ -8,7 +8,7 @@ Run:
   conda run -n base python eeg/test_blink.py
 
 Blink deliberately and confirm the terminal output and on-screen spikes line up.
-Adjust THRESHOLD below if you get too many false positives or miss blinks.
+The detection threshold is fixed inside eeg_stream.py (DEFAULT_BLINK_THRESHOLD).
 """
 
 import os
@@ -21,14 +21,13 @@ import gpype as gp
 sys.path.insert(0, os.path.dirname(__file__))
 from eeg_stream import EEGBuffer, check_blink_state
 
-THRESHOLD  = 40.0    # µV mean absolute — raise to reduce false positives
 POLL_EVERY = 0.1     # seconds between blink checks in the background thread
 
 def _blink_monitor():
     """Background thread: prints to terminal whenever a blink fires."""
     blink_was_active = False
     while True:
-        active = check_blink_state(threshold=THRESHOLD)
+        active = check_blink_state()
         if active and not blink_was_active:
             print(f"[{time.strftime('%H:%M:%S')}]  BLINK detected", flush=True)
         blink_was_active = active
@@ -60,7 +59,7 @@ def main():
     t = threading.Thread(target=_blink_monitor, daemon=True)
     t.start()
 
-    print(f"Threshold={THRESHOLD} µV  |  close the window to stop\n")
+    print("close the window to stop\n")
     app.run()   # blocks until window is closed
 
     p.stop()
