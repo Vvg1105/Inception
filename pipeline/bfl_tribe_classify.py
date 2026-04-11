@@ -67,6 +67,25 @@ def _load_dotenv(path: Path) -> None:
             os.environ[key] = val
 
 
+def _default_classifier_candidates() -> list[Path]:
+    """Prefer repo ``outputs/``; on RunPod artifacts often live under ``/workspace/outputs/``."""
+    name = "photo_element_logreg.joblib"
+    return [
+        PROJECT_ROOT / "outputs" / name,
+        Path("/workspace/outputs") / name,
+    ]
+
+
+def _resolve_classifier_path(explicit: Path | None) -> Path:
+    if explicit is not None:
+        return explicit.resolve()
+    for cand in _default_classifier_candidates():
+        if cand.is_file():
+            logger.info("Using classifier %s", cand)
+            return cand.resolve()
+    return _default_classifier_candidates()[0].resolve()
+
+
 def _suffix_for_mime(mime: str) -> str:
     m = (mime or "").lower()
     if "png" in m:
@@ -88,8 +107,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument(
         "--model",
         type=Path,
-        default=PROJECT_ROOT / "outputs" / "photo_element_logreg.joblib",
-        help="Classifier joblib from train_element_classifier",
+        default=None,
+        help="Classifier joblib (default: ./outputs/ or /workspace/outputs/ photo_element_logreg.joblib)",
     )
     p.add_argument(
         "--cache-folder",
@@ -148,6 +167,7 @@ def main(argv: list[str] | None = None) -> int:
         help="Load env vars from this file if keys are missing",
     )
     args = p.parse_args(argv)
+    model_path = _resolve_classifier_path(args.model)
 
     _load_dotenv(args.env_file.resolve())
 
@@ -173,8 +193,16 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     try:
-        art = _load_classifier_artifact(args.model)
-    except (FileNotFoundError, ValueError) as e:
+        art = _load_classifier_artifact(model_path)
+    except FileNotFoundError as e:
+        logger.error("%s", e)
+        if args.model is None:
+            logger.error(
+                "Tried: %s",
+                ", ".join(str(p) for p in _default_classifier_candidates()),
+            )
+        return 1
+    except ValueError as e:
         logger.error("%s", e)
         return 1
 

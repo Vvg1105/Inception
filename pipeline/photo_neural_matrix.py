@@ -135,8 +135,9 @@ def _check_ffmpeg() -> str:
     exe = shutil.which("ffmpeg")
     if not exe:
         raise RuntimeError(
-            "ffmpeg not found on PATH. Install it (e.g. brew install ffmpeg) "
-            "to convert images to MP4."
+            "ffmpeg not found on PATH. Install it: "
+            "Linux/RunPod: sudo apt-get update && sudo apt-get install -y ffmpeg. "
+            "macOS: brew install ffmpeg."
         )
     return exe
 
