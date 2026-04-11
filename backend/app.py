@@ -413,6 +413,64 @@ def vision_classify_image(req: VisionClassifyFromImageRequest) -> VisionClassify
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Sketchfab 3D model search (runs in parallel with TRIBE)
+# ═══════════════════════════════════════════════════════════════════════════
+
+_SF_SEARCH = "https://api.sketchfab.com/v3/search"
+_SF_MODELS = "https://api.sketchfab.com/v3/models"
+
+
+def _sketchfab_search_glb(query: str, token: str) -> dict | None:
+    """Search Sketchfab for a downloadable GLB matching *query*.
+
+    Returns ``{"glb_url": ..., "name": ..., "author": ..., "uid": ...}``
+    or ``None`` if nothing found.
+    """
+    import requests
+
+    resp = requests.get(
+        _SF_SEARCH,
+        params={
+            "type": "models",
+            "q": query,
+            "downloadable": "true",
+            "sort_by": "-likeCount",
+            "count": 3,
+        },
+        headers={"Authorization": f"Token {token}"},
+        timeout=10,
+    )
+    if resp.status_code != 200:
+        return None
+    results = resp.json().get("results", [])
+    if not results:
+        return None
+
+    for model in results:
+        uid = model.get("uid")
+        if not uid:
+            continue
+        dl = requests.get(
+            f"{_SF_MODELS}/{uid}/download",
+            headers={"Authorization": f"Token {token}"},
+            timeout=10,
+        )
+        if dl.status_code != 200:
+            continue
+        dl_data = dl.json()
+        glb_info = dl_data.get("glb") or dl_data.get("gltf")
+        if not glb_info or not glb_info.get("url"):
+            continue
+        return {
+            "glb_url": glb_info["url"],
+            "name": model.get("name", query),
+            "author": (model.get("user") or {}).get("displayName", ""),
+            "uid": uid,
+        }
+    return None
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Combined streaming pipeline: BFL → image (streamed) → TRIBE → classify
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -439,13 +497,16 @@ async def vision_pipeline(req: VisionClassifyRequest):
     pipeline_w = int(os.getenv("BFL_PIPELINE_WIDTH", "1024"))
     pipeline_h = int(os.getenv("BFL_PIPELINE_HEIGHT", "1024"))
 
+    sf_token = (os.getenv("SKETCHFAB_API_TOKEN") or "").strip()
+
     async def _stream():
         loop = asyncio.get_running_loop()
+        prompt_text = req.prompt.strip()
 
         img_bytes, mime = await loop.run_in_executor(
             None,
             lambda: generate_bfl_image(
-                prompt=req.prompt.strip(),
+                prompt=prompt_text,
                 api_key=api_key,
                 bfl_model=bfl_model,
                 width=pipeline_w,
@@ -455,21 +516,27 @@ async def vision_pipeline(req: VisionClassifyRequest):
         img_b64 = _b64.b64encode(img_bytes).decode("ascii")
         yield json.dumps({"stage": "image", "image_b64": img_b64, "mime": mime}) + "\n"
 
-        try:
-            result = await loop.run_in_executor(
-                None,
-                lambda: classify_from_image_bytes(
-                    img_bytes=img_bytes,
-                    mime=mime,
-                    duration_sec=1.0,
-                    fps=4,
-                    fast=True,
-                    cache_folder=os.getenv("TRIBE_CACHE_FOLDER"),
-                ),
-            )
-            classified, place_key, confidence, probs, tribe_pooled = result
+        tribe_task = asyncio.ensure_future(loop.run_in_executor(
+            None,
+            lambda: classify_from_image_bytes(
+                img_bytes=img_bytes,
+                mime=mime,
+                duration_sec=1.0,
+                fps=4,
+                fast=True,
+                cache_folder=os.getenv("TRIBE_CACHE_FOLDER"),
+            ),
+        ))
 
-            snippet = req.prompt.strip()[:72]
+        sf_task = asyncio.ensure_future(loop.run_in_executor(
+            None,
+            lambda: _sketchfab_search_glb(prompt_text, sf_token),
+        )) if sf_token else None
+
+        try:
+            classified, place_key, confidence, probs, tribe_pooled = await tribe_task
+
+            snippet = prompt_text[:72]
             narration = (
                 f"Vision: {classified} ({confidence:.0%})"
                 + (f" — {snippet}" if snippet else "")
@@ -497,6 +564,14 @@ async def vision_pipeline(req: VisionClassifyRequest):
             }) + "\n"
         except Exception as exc:
             yield json.dumps({"stage": "error", "detail": str(exc)}) + "\n"
+
+        if sf_task is not None:
+            try:
+                sf_result = await sf_task
+                if sf_result:
+                    yield json.dumps({"stage": "model", **sf_result}) + "\n"
+            except Exception as exc:
+                print(f"[Sketchfab] search failed: {exc}")
 
     return StreamingResponse(_stream(), media_type="application/x-ndjson")
 
