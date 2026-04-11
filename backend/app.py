@@ -29,11 +29,14 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import asyncio
+
 import httpx
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+from starlette.responses import StreamingResponse
 
 # pipeline/, tribe/, etc. live at repo root (parent of backend/)
 _REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -407,6 +410,94 @@ def vision_classify_image(req: VisionClassifyFromImageRequest) -> VisionClassify
         tribe_dim=int(tribe_pooled.shape[0]),
         brain_image_b64=brain_b64,
     )
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Combined streaming pipeline: BFL → image (streamed) → TRIBE → classify
+# ═══════════════════════════════════════════════════════════════════════════
+
+@app.post("/api/vision-pipeline")
+async def vision_pipeline(req: VisionClassifyRequest):
+    """BFL + TRIBE in one call, streamed as NDJSON.
+
+    Eliminates the base64 round trip: the backend keeps the image bytes in
+    memory between generation and classification instead of sending them to the
+    browser and back.  Also uses shorter video params (1.5 s / 8 fps = 12 frames
+    instead of 5 s / 24 fps = 120 frames) since TRIBE pools identical frames.
+    """
+    import base64 as _b64
+
+    api_key = (os.getenv("BFL_API_KEY") or "").strip()
+    if not api_key:
+        raise HTTPException(status_code=503, detail="BFL_API_KEY not set")
+    try:
+        from vision_place import classify_from_image_bytes, generate_bfl_image
+    except ImportError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    bfl_model = os.getenv("BFL_MODEL", "flux-2-klein-4b")
+    pipeline_w = int(os.getenv("BFL_PIPELINE_WIDTH", "1024"))
+    pipeline_h = int(os.getenv("BFL_PIPELINE_HEIGHT", "1024"))
+
+    async def _stream():
+        loop = asyncio.get_running_loop()
+
+        img_bytes, mime = await loop.run_in_executor(
+            None,
+            lambda: generate_bfl_image(
+                prompt=req.prompt.strip(),
+                api_key=api_key,
+                bfl_model=bfl_model,
+                width=pipeline_w,
+                height=pipeline_h,
+            ),
+        )
+        img_b64 = _b64.b64encode(img_bytes).decode("ascii")
+        yield json.dumps({"stage": "image", "image_b64": img_b64, "mime": mime}) + "\n"
+
+        try:
+            result = await loop.run_in_executor(
+                None,
+                lambda: classify_from_image_bytes(
+                    img_bytes=img_bytes,
+                    mime=mime,
+                    duration_sec=1.5,
+                    fps=8,
+                    cache_folder=os.getenv("TRIBE_CACHE_FOLDER"),
+                ),
+            )
+            classified, place_key, confidence, probs, tribe_pooled = result
+
+            snippet = req.prompt.strip()[:72]
+            narration = (
+                f"Vision: {classified} ({confidence:.0%})"
+                + (f" — {snippet}" if snippet else "")
+            )
+
+            brain_b64 = ""
+            try:
+                from brain_render import render_tribe_brain_b64
+
+                brain_b64 = await loop.run_in_executor(
+                    None, lambda: render_tribe_brain_b64(tribe_pooled)
+                )
+            except Exception:
+                pass
+
+            yield json.dumps({
+                "stage": "classified",
+                "classified_label": classified,
+                "place_key": place_key,
+                "confidence": confidence,
+                "probabilities": probs,
+                "narration": narration,
+                "tribe_dim": int(tribe_pooled.shape[0]),
+                "brain_image_b64": brain_b64,
+            }) + "\n"
+        except Exception as exc:
+            yield json.dumps({"stage": "error", "detail": str(exc)}) + "\n"
+
+    return StreamingResponse(_stream(), media_type="application/x-ndjson")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
