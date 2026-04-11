@@ -8,253 +8,259 @@
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
     body {
-      background: #000;
+      background: #fff;
       overflow: hidden;
       font-family: 'Courier New', Courier, monospace;
       color: #888;
       user-select: none;
     }
 
-    #canvas {
-      display: block;
-      width: 100vw;
-      height: 100vh;
-    }
+    #canvas { display: block; width: 100vw; height: 100vh; }
 
-    /* ── Hint ─────────────────────────────────────────────────────────── */
+    /* ── Hint ──────────────────────────────────────────────────────────── */
     #hint {
-      position: fixed;
-      top: 22px;
-      left: 50%;
-      transform: translateX(-50%);
-      font-size: 10px;
-      letter-spacing: 0.18em;
-      text-transform: uppercase;
-      color: #2a2a35;
-      pointer-events: none;
-      z-index: 60;
-      transition: opacity 1.2s ease;
+      position: fixed; top: 22px; left: 50%; transform: translateX(-50%);
+      font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase;
+      color: #aaa; pointer-events: none; z-index: 60; transition: opacity 1.4s ease;
     }
 
-    /* ── Popup ────────────────────────────────────────────────────────── */
+    /* ── Mood ──────────────────────────────────────────────────────────── */
+    #mood {
+      position: fixed; top: 24px; right: 28px; z-index: 60;
+      text-align: right; pointer-events: none;
+    }
+    #mood-state {
+      font-size: 22px; font-weight: 400; letter-spacing: 0.06em;
+      color: #aabbdd; line-height: 1; transition: color 1.4s ease;
+    }
+    #mood-sub {
+      font-size: 9px; letter-spacing: 0.22em; text-transform: uppercase;
+      color: #667788; margin-top: 5px; transition: color 1.4s ease;
+    }
+
+    /* ── World panel ───────────────────────────────────────────────────── */
+    #world-btn {
+      position: fixed; top: 20px; left: 20px; z-index: 70;
+      font-family: inherit; font-size: 9px; letter-spacing: 0.18em;
+      text-transform: uppercase; color: #888; background: rgba(255,255,255,0.7);
+      border: 1px solid #ccc; border-radius: 3px; padding: 5px 12px;
+      cursor: pointer; backdrop-filter: blur(4px); transition: all 0.15s;
+    }
+    #world-btn:hover { color: #333; border-color: #888; }
+    #world-btn.open  { color: #333; border-color: #888; background: rgba(255,255,255,0.95); }
+
+    #world-panel {
+      display: none; position: fixed; top: 52px; left: 20px; z-index: 69;
+      background: rgba(252,252,255,0.96); border: 1px solid #ddd;
+      border-radius: 4px; padding: 16px; width: 240px;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 4px 30px rgba(0,0,0,0.12);
+    }
+    #world-panel.open { display: block; }
+
+    .wp-section { margin-bottom: 16px; }
+    .wp-section:last-child { margin-bottom: 0; }
+    .wp-title {
+      font-size: 8px; letter-spacing: 0.2em; text-transform: uppercase;
+      color: #999; margin-bottom: 8px; border-bottom: 1px solid #eee;
+      padding-bottom: 5px;
+    }
+    .wp-row { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
+    .wp-row:last-child { margin-bottom: 0; }
+    .wp-row label { font-size: 9px; color: #888; width: 52px; flex-shrink: 0; letter-spacing: 0.05em; }
+
+    input[type="color"] {
+      width: 32px; height: 22px; border: 1px solid #ddd; border-radius: 3px;
+      cursor: pointer; padding: 1px; background: white;
+    }
+
+    .swatch-row { display: flex; gap: 5px; flex-wrap: wrap; }
+    .swatch {
+      width: 24px; height: 24px; border-radius: 3px; border: 2px solid transparent;
+      cursor: pointer; transition: border-color 0.15s; flex-shrink: 0;
+    }
+    .swatch:hover  { border-color: #888; }
+    .swatch.active { border-color: #333; }
+
+    .wp-slider {
+      -webkit-appearance: none; width: 100%; height: 3px;
+      background: #e0e0e8; outline: none; border-radius: 2px; cursor: pointer;
+    }
+    .wp-slider::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 11px; height: 11px;
+      background: #888; border-radius: 50%; cursor: pointer;
+    }
+
+    /* ── Placement popup ───────────────────────────────────────────────── */
     #popup {
-      display: none;
-      position: fixed;
-      background: rgba(4, 4, 8, 0.94);
-      border: 1px solid #1a1a26;
-      border-radius: 3px;
-      padding: 14px 18px;
-      z-index: 100;
-      width: 250px;
-      backdrop-filter: blur(8px);
-      box-shadow: 0 4px 40px rgba(0,0,0,0.9), 0 0 0 1px rgba(80,80,160,0.08);
+      display: none; position: fixed; background: rgba(252,252,255,0.97);
+      border: 1px solid #ccc; border-radius: 4px; padding: 16px 18px;
+      z-index: 100; width: 270px;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 4px 30px rgba(0,0,0,0.15);
     }
-
     #popup-label {
-      font-size: 9px;
-      letter-spacing: 0.2em;
-      text-transform: uppercase;
-      color: #333;
-      margin-bottom: 10px;
+      font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase;
+      color: #aaa; margin-bottom: 10px;
     }
-
     #objectInput {
-      width: 100%;
-      background: transparent;
-      border: none;
-      border-bottom: 1px solid #1e1e2e;
-      color: #99a;
-      font-family: inherit;
-      font-size: 13px;
-      padding: 4px 0 6px;
-      outline: none;
-      transition: border-color 0.2s;
+      width: 100%; background: transparent; border: none;
+      border-bottom: 1px solid #ddd; color: #333; font-family: inherit;
+      font-size: 14px; padding: 4px 0 6px; outline: none; transition: border-color 0.2s;
     }
-
-    #objectInput:focus { border-bottom-color: #334; }
-    #objectInput::placeholder { color: #2a2a36; }
+    #objectInput:focus { border-bottom-color: #888; }
+    #objectInput::placeholder { color: #bbb; }
 
     #popup-hint {
-      font-size: 9px;
-      color: #252530;
-      margin-top: 6px;
-      letter-spacing: 0.05em;
-      line-height: 1.7;
+      font-size: 9px; color: #bbb; margin-top: 6px;
+      letter-spacing: 0.04em; line-height: 1.8;
     }
 
-    #popup-buttons {
-      display: flex;
-      gap: 8px;
-      margin-top: 12px;
+    /* colour tint row */
+    #tint-row {
+      display: flex; align-items: center; gap: 8px; margin-top: 11px;
     }
+    #tint-label { font-size: 9px; color: #aaa; letter-spacing: 0.1em; }
+    #obj-color  { width: 28px; height: 20px; }
+    #tint-reset {
+      font-size: 9px; color: #bbb; cursor: pointer; margin-left: auto;
+      letter-spacing: 0.06em; text-decoration: underline;
+    }
+    #tint-reset:hover { color: #555; }
 
+    #popup-buttons { display: flex; gap: 8px; margin-top: 12px; }
     #popup button {
-      background: transparent;
-      border: 1px solid #1e1e2e;
-      color: #556;
-      font-family: inherit;
-      font-size: 9px;
-      letter-spacing: 0.15em;
-      padding: 5px 14px;
-      cursor: pointer;
-      text-transform: uppercase;
-      border-radius: 2px;
-      transition: all 0.15s;
+      background: transparent; border: 1px solid #ccc; color: #888;
+      font-family: inherit; font-size: 9px; letter-spacing: 0.15em;
+      padding: 5px 14px; cursor: pointer; text-transform: uppercase;
+      border-radius: 2px; transition: all 0.15s;
     }
+    #popup button:hover { border-color: #888; color: #333; }
+    #placeBtn { border-color: #aac; color: #558; }
+    #placeBtn:hover { border-color: #558; color: #335; background: rgba(80,80,160,0.06); }
 
-    #popup button:hover { border-color: #446; color: #99c; }
-    #placeBtn { border-color: #223; color: #668; }
-    #placeBtn:hover { border-color: #558; color: #aac; background: rgba(50,50,120,0.1); }
-
-    /* ── Bottom UI ────────────────────────────────────────────────────── */
+    /* ── Bottom bar ────────────────────────────────────────────────────── */
     #ui {
-      position: fixed;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      background: rgba(2, 2, 5, 0.88);
-      border-top: 1px solid #0d0d14;
-      padding: 14px 28px;
-      display: flex;
-      align-items: flex-start;
-      gap: 48px;
-      z-index: 50;
-      backdrop-filter: blur(6px);
+      position: fixed; bottom: 0; left: 0; right: 0;
+      background: rgba(250,250,255,0.92); border-top: 1px solid #e0e0ec;
+      padding: 14px 28px; display: flex; align-items: center; gap: 32px;
+      z-index: 50; backdrop-filter: blur(8px);
     }
 
-    .slider-group {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-
-    .slider-row {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .slider-label {
-      font-size: 9px;
-      letter-spacing: 0.14em;
-      text-transform: uppercase;
-      color: #333;
-      width: 54px;
+    /* 2-D arousal/valence pad */
+    #emo-pad-wrap { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+    #emo-pad {
+      width: 110px; height: 110px; position: relative;
+      border: 1px solid #ddd; border-radius: 4px; cursor: crosshair;
+      background:
+        linear-gradient(to right, rgba(220,120,80,0.18), rgba(80,140,220,0.18)),
+        linear-gradient(to top,   rgba(100,100,100,0.1), rgba(255,220,80,0.1));
       flex-shrink: 0;
     }
-
-    input[type="range"] {
-      -webkit-appearance: none;
-      width: 130px;
-      height: 2px;
-      background: #111118;
-      outline: none;
-      border-radius: 1px;
-      cursor: pointer;
+    .pad-axis-label {
+      position: absolute; font-size: 8px; letter-spacing: 0.1em;
+      text-transform: uppercase; color: #bbb; pointer-events: none;
+    }
+    .pad-axis-label.top    { top: 3px;  left: 50%; transform: translateX(-50%); }
+    .pad-axis-label.bottom { bottom: 3px; left: 50%; transform: translateX(-50%); }
+    .pad-axis-label.left   { left: 3px; top: 50%; transform: translateY(-50%); writing-mode: vertical-lr; rotate: 180deg; }
+    .pad-axis-label.right  { right: 3px; top: 50%; transform: translateY(-50%); writing-mode: vertical-lr; }
+    #pad-dot {
+      position: absolute; width: 12px; height: 12px;
+      background: #557; border: 2px solid #fff; border-radius: 50%;
+      box-shadow: 0 1px 6px rgba(0,0,0,0.3);
+      transform: translate(-50%, -50%);
+      pointer-events: none; transition: background 0.5s ease;
     }
 
-    input[type="range"]::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      width: 9px;
-      height: 9px;
-      background: #334;
-      border: 1px solid #446;
-      border-radius: 50%;
-      cursor: pointer;
-      transition: background 0.15s;
+    /* focus slider */
+    .focus-row { display: flex; align-items: center; gap: 8px; width: 110px; }
+    .focus-label { font-size: 8px; letter-spacing: 0.12em; text-transform: uppercase; color: #aaa; flex-shrink: 0; }
+    .focus-val   { font-size: 8px; color: #aaa; width: 24px; text-align: right; flex-shrink: 0; }
+    input[type="range"].focus-slider {
+      -webkit-appearance: none; flex: 1; height: 2px;
+      background: #ddd; outline: none; border-radius: 1px; cursor: pointer;
+    }
+    input[type="range"].focus-slider::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 9px; height: 9px;
+      background: #888; border-radius: 50%; cursor: pointer;
     }
 
-    input[type="range"]::-webkit-slider-thumb:hover { background: #668; }
+    /* object list */
+    #obj-panel { flex: 1; min-width: 0; padding-top: 2px; }
+    #obj-title  { font-size: 8px; letter-spacing: 0.2em; text-transform: uppercase; color: #ccc; margin-bottom: 7px; }
+    #obj-tags   { display: flex; flex-wrap: wrap; gap: 5px; }
+    .obj-tag    { font-size: 9px; letter-spacing: 0.06em; color: #999; border: 1px solid #ddd; padding: 2px 8px; border-radius: 2px; }
+    #obj-empty  { font-size: 9px; color: #ddd; }
 
-    .slider-val {
-      font-size: 9px;
-      color: #334;
-      width: 30px;
-      text-align: right;
-      flex-shrink: 0;
-    }
-
-    /* ── Object list ──────────────────────────────────────────────────── */
-    #obj-panel {
-      flex: 1;
-      min-width: 0;
-    }
-
-    #obj-title {
-      font-size: 8px;
-      letter-spacing: 0.2em;
-      text-transform: uppercase;
-      color: #252530;
-      margin-bottom: 7px;
-    }
-
-    #obj-tags {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 5px;
-    }
-
-    .obj-tag {
-      font-size: 9px;
-      letter-spacing: 0.06em;
-      color: #33344a;
-      border: 1px solid #141420;
-      padding: 2px 8px;
-      border-radius: 2px;
-    }
-
-    #obj-empty {
-      font-size: 9px;
-      color: #1a1a22;
-      letter-spacing: 0.05em;
-    }
-
-    /* ── Loading indicator ────────────────────────────────────────────── */
-    /* ── Mood display ─────────────────────────────────────────────────── */
-    #mood {
-      position: fixed;
-      top: 24px;
-      right: 28px;
-      z-index: 60;
-      text-align: right;
-      pointer-events: none;
-    }
-
-    #mood-state {
-      font-size: 22px;
-      font-weight: 400;
-      letter-spacing: 0.06em;
-      color: #aabbdd;
-      line-height: 1;
-      transition: color 1.4s ease;
-    }
-
-    #mood-sub {
-      font-size: 9px;
-      letter-spacing: 0.22em;
-      text-transform: uppercase;
-      color: #667788;
-      margin-top: 5px;
-      transition: color 1.4s ease;
-    }
-
+    /* loader */
     #loader {
-      display: none;
-      position: fixed;
-      bottom: 90px;
-      right: 28px;
-      font-size: 9px;
-      letter-spacing: 0.18em;
-      text-transform: uppercase;
-      color: #334;
-      z-index: 60;
-      animation: pulse 1.2s ease infinite;
+      display: none; position: fixed; bottom: 90px; right: 28px;
+      font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase;
+      color: #aaa; z-index: 60; animation: pulse 1.2s ease infinite;
+    }
+    @keyframes pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
+
+    /* ── Narration ─────────────────────────────────────────────────────── */
+    #narration-text {
+      position: fixed; bottom: 160px; left: 50%; transform: translateX(-50%);
+      max-width: 480px; text-align: center;
+      font-size: 13px; line-height: 1.7; letter-spacing: 0.02em;
+      color: #444; font-style: italic;
+      pointer-events: none; z-index: 60;
+      opacity: 0; transition: opacity 0.8s ease;
     }
 
-    @keyframes pulse {
-      0%, 100% { opacity: 0.4; }
-      50%       { opacity: 1;   }
+    /* ── Parsed label preview in popup ────────────────────────────────── */
+    #parse-preview {
+      margin-top: 8px; padding: 7px 9px;
+      background: rgba(0,0,0,0.03); border-radius: 3px;
+      font-size: 9px; color: #aaa; line-height: 1.8; letter-spacing: 0.04em;
+      display: none;
     }
+    #parse-preview span { margin-right: 8px; }
+    .parse-chip {
+      display: inline-block; padding: 1px 6px; border-radius: 10px;
+      font-size: 8px; font-weight: 600; letter-spacing: 0.06em;
+      margin-right: 4px; color: white;
+    }
+    .chip-color    { background: #777; }
+    .chip-size     { background: #6688aa; }
+    .chip-material { background: #aa6688; }
+    .chip-base     { background: #446; }
+
+    #popup-scale-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+    #popup-scale-row label { font-size: 9px; color: #888; width: 44px; flex-shrink: 0; letter-spacing: 0.05em; }
+
+    /* Selected object — resize */
+    #selection-panel {
+      display: none; position: fixed; bottom: 88px; right: 24px; z-index: 56;
+      background: rgba(252,252,255,0.96); border: 1px solid #ddd; border-radius: 4px;
+      padding: 12px 14px; min-width: 220px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.1);
+      backdrop-filter: blur(8px);
+    }
+    #selection-panel.open { display: block; }
+    #selection-title { font-size: 8px; letter-spacing: 0.18em; text-transform: uppercase; color: #999; margin-bottom: 8px; border-bottom: 1px solid #eee; padding-bottom: 6px; }
+    #selection-panel .sel-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+    #selection-panel .sel-row:last-of-type { margin-bottom: 0; }
+    #selection-panel label { font-size: 9px; color: #888; width: 44px; flex-shrink: 0; }
+    #selection-clear {
+      margin-top: 8px; width: 100%; font-family: inherit; font-size: 9px; letter-spacing: 0.12em;
+      text-transform: uppercase; padding: 5px; border: 1px solid #ccc; background: transparent; color: #888; cursor: pointer; border-radius: 2px;
+    }
+    #selection-clear:hover { border-color: #888; color: #333; }
+
+    .eye-gaze-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; align-items: center; }
+    .eye-gaze-btn {
+      font-family: inherit; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase;
+      padding: 5px 11px; border-radius: 3px; cursor: pointer; border: 1px solid #ccc;
+      background: rgba(255,255,255,0.95); color: #555;
+    }
+    .eye-gaze-btn:hover:not(:disabled) { border-color: #888; color: #222; }
+    #eye-gaze-start { border-color: #aac; color: #446; }
+    #eye-gaze-start:hover:not(:disabled) { background: rgba(80,80,160,0.07); }
+    .eye-gaze-btn:disabled { opacity: 0.45; cursor: default; }
   </style>
 </head>
 <body>
@@ -268,18 +274,180 @@
   <div id="mood-sub">unfocused</div>
 </div>
 
+<!-- World panel toggle -->
+<button id="world-btn">world</button>
+<div id="world-panel">
+
+  <div class="wp-section">
+    <div class="wp-title">sky</div>
+    <div class="wp-row">
+      <label>presets</label>
+      <div class="swatch-row" style="flex:1">
+        <div class="swatch" style="background:#a8d0f0" data-sky-preset="day" data-sky-zenith="#a8d0f0" data-sky-horizon="#e8f4ff" title="day"></div>
+        <div class="swatch" style="background:#ffd080" data-sky-preset="golden" data-sky-zenith="#ffcca0" data-sky-horizon="#ffe8c8" title="golden hour"></div>
+        <div class="swatch" style="background:#1a0a40" data-sky-preset="dusk" data-sky-zenith="#1a0a40" data-sky-horizon="#ff5020" title="dusk"></div>
+        <div class="swatch" style="background:#000510" data-sky-preset="night" data-sky-zenith="#000510" data-sky-horizon="#0a0a20" title="night"></div>
+        <div class="swatch" style="background:#c8a8ff" data-sky-preset="dream" data-sky-zenith="#c8a8ff" data-sky-horizon="#ffffff" title="dream"></div>
+        <div class="swatch" style="background:#778899" data-sky-preset="overcast" data-sky-zenith="#778899" data-sky-horizon="#ccccdd" title="overcast"></div>
+      </div>
+    </div>
+    <div class="wp-row">
+      <label>zenith</label>
+      <input type="color" id="sky-zenith" value="#a8d0f0">
+    </div>
+    <div class="wp-row">
+      <label>horizon</label>
+      <input type="color" id="sky-horizon" value="#e8f4ff">
+    </div>
+    <div class="wp-row">
+      <label>sun °</label>
+      <input type="range" class="wp-slider" id="sun-elevation" min="-15" max="70" step="1" value="18" style="flex:1">
+      <span id="v-sun-el" style="font-size:8px;color:#888;width:26px;text-align:right">18°</span>
+    </div>
+    <div class="wp-row">
+      <label>azimuth</label>
+      <input type="range" class="wp-slider" id="sky-azimuth" min="0" max="359" step="1" value="200" style="flex:1">
+      <span id="v-sun-az" style="font-size:8px;color:#888;width:26px;text-align:right">200°</span>
+    </div>
+    <div class="wp-row">
+      <label>haze</label>
+      <input type="range" class="wp-slider" id="sky-turbidity" min="1" max="22" step="0.5" value="6" style="flex:1">
+      <span id="v-turbidity" style="font-size:8px;color:#888;width:26px;text-align:right">6</span>
+    </div>
+  </div>
+
+  <div class="wp-section">
+    <div class="wp-title">ground</div>
+    <div class="wp-row">
+      <label>colour</label>
+      <input type="color" id="ground-color" value="#0d0d12">
+      <div class="swatch-row" style="flex:1">
+        <div class="swatch active" style="background:#e0e0e8" data-ground="#e0e0e8" title="concrete"></div>
+        <div class="swatch" style="background:#4a7a3a"        data-ground="#4a7a3a" title="grass"></div>
+        <div class="swatch" style="background:#c8a860"        data-ground="#c8a860" title="sand"></div>
+        <div class="swatch" style="background:#3a6a9a"        data-ground="#3a6a9a" title="water"></div>
+        <div class="swatch" style="background:#f0f0f8"        data-ground="#f0f0f8" title="snow"></div>
+        <div class="swatch" style="background:#0a0a0e"        data-ground="#0a0a0e" title="void"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="wp-section">
+    <div class="wp-title">fog</div>
+    <div class="wp-row">
+      <label>density</label>
+      <input type="range" class="wp-slider" id="fog-slider" min="0" max="1" step="0.01" value="0.3" style="flex:1">
+    </div>
+    <div class="wp-row">
+      <label>sky tint</label>
+      <input type="range" class="wp-slider" id="sky-tint-blend" min="0" max="1" step="0.01" value="0.35" style="flex:1">
+      <span id="v-sky-tint" style="font-size:8px;color:#888;width:26px;text-align:right">0.35</span>
+    </div>
+  </div>
+
+  <div class="wp-section">
+    <div class="wp-title">grid</div>
+    <div class="wp-row">
+      <label>brightness</label>
+      <input type="range" class="wp-slider" id="grid-intensity" min="0" max="1" step="0.01" value="0.85" style="flex:1">
+      <span id="v-grid" style="font-size:8px;color:#888;width:26px;text-align:right">0.85</span>
+    </div>
+  </div>
+
+  <div class="wp-section">
+    <div class="wp-title">pointer</div>
+    <div class="wp-row">
+      <label title="Higher = ground cursor catches the ray faster (less floaty lag)">inertia</label>
+      <input type="range" class="wp-slider" id="cursor-inertia" min="0" max="1" step="0.02" value="0.72" style="flex:1">
+      <span id="v-cursor-inertia" style="font-size:8px;color:#888;width:28px;text-align:right">0.72</span>
+    </div>
+    <div class="wp-row">
+      <label>gamepad</label>
+      <input type="range" class="wp-slider" id="gamepad-nudge" min="0" max="1" step="0.05" value="0.4" style="flex:1">
+      <span id="v-gamepad" style="font-size:8px;color:#888;width:28px;text-align:right">0.40</span>
+    </div>
+    <div class="wp-row" style="align-items:flex-start">
+      <label>eye gaze</label>
+      <div style="flex:1">
+        <p style="font-size:7px;color:#888;line-height:1.5;margin:0 0 6px">
+          <strong>MediaPipe</strong> eye blendshapes (not raw head/iris drift) need your <strong>webcam</strong>. Click <strong>start</strong>, then <strong>Allow</strong>.
+        </p>
+        <div class="eye-gaze-actions">
+          <button type="button" class="eye-gaze-btn" id="eye-gaze-start">start webcam</button>
+          <button type="button" class="eye-gaze-btn" id="eye-gaze-stop" disabled>stop</button>
+        </div>
+        <p id="eye-gaze-status" style="font-size:7px;color:#999;margin:6px 0 0;line-height:1.45">Camera off — press start webcam above</p>
+      </div>
+    </div>
+    <div class="wp-row">
+      <label>gaze mix</label>
+      <input type="range" class="wp-slider" id="gaze-mix" min="0" max="1" step="0.02" value="0.85" style="flex:1">
+      <span id="v-gaze-mix" style="font-size:8px;color:#888;width:28px;text-align:right">0.85</span>
+    </div>
+    <div class="wp-row">
+      <label>gaze sens</label>
+      <input type="range" class="wp-slider" id="gaze-sens" min="0.35" max="2" step="0.05" value="1" style="flex:1">
+      <span id="v-gaze-sens" style="font-size:8px;color:#888;width:32px;text-align:right">1.00</span>
+    </div>
+    <div class="wp-row" style="align-items:center">
+      <label>blink hold</label>
+      <label style="display:flex;align-items:center;gap:6px;flex:1;cursor:pointer;font-size:8px;color:#666">
+        <input type="checkbox" id="blink-pause-cursor" style="margin:0">
+        pause cursor on blink
+      </label>
+    </div>
+    <div class="wp-row" style="align-items:center">
+      <label>blink src</label>
+      <select id="blink-source" style="flex:1;font-size:8px;padding:3px 4px;font-family:inherit;color:#555;border:1px solid #ddd;border-radius:3px;background:#fff">
+        <option value="auto" selected>auto — EEG if present, else camera</option>
+        <option value="camera">camera (MediaPipe)</option>
+        <option value="eeg">EEG only</option>
+      </select>
+    </div>
+    <div class="wp-row" style="align-items:center">
+      <label>blink UI</label>
+      <label style="display:flex;align-items:center;gap:6px;flex:1;cursor:pointer;font-size:8px;color:#666">
+        <input type="checkbox" id="blink-open-build" checked style="margin:0">
+        open build (place) after blink
+      </label>
+    </div>
+    <p style="font-size:7px;color:#aaa;letter-spacing:0.05em;line-height:1.55;margin:6px 0 0;">
+      Gaze: blend with mouse (inertia). Custom gaze:
+      <code style="font-size:7px;color:#888">window.__dreamGaze</code> NDC.
+      EEG blink: each frame set
+      <code style="font-size:7px;color:#888">window.__dreamEEG = { present: true, blink: boolean }</code>.
+      Listen for <code style="font-size:7px;color:#888">dream-blink-up</code> / <code style="font-size:7px;color:#888">dream-blink-down</code> (e.g. release = “click”).
+    </p>
+  </div>
+
+</div>
+
 <!-- Placement popup -->
 <div id="popup">
   <div id="popup-label">place object</div>
   <input type="text" id="objectInput"
-         placeholder="building a · tower · tree · road…"
+         placeholder="building a · river · cloud · park…"
          autocomplete="off" spellcheck="false">
+  <div id="parse-preview"></div>
+  <div id="popup-scale-row">
+    <label>scale</label>
+    <input type="range" class="wp-slider" id="place-scale" min="0.15" max="3.5" step="0.05" value="1" style="flex:1">
+    <span id="v-place-scale" style="font-size:8px;color:#888;width:36px;text-align:right">1.00×</span>
+  </div>
   <div id="popup-hint">
-    commercial: building a–n · skyscraper a–e · tower<br>
+    civic: stadium · arena · plaza · garden · playground · park<br>
+    commercial: building a–n · skyscraper a–e · wide building · mall<br>
     industrial: industrial a–t · factory · chimney · tank<br>
-    suburban: suburban a–u · house · tree · fence · path<br>
+    suburban: suburban a–u · house · tree · fence · path long · driveway long<br>
     roads: road · bend · curve · crossroad · roundabout · bridge<br>
-    props: light · cone · barrier · sign · tile · planter
+    nature: river · pond · lake · hill · cloud<br>
+    scale: slider multiplies placement size (stacks with words like massive / tiny). Click a placed object to resize it.<br>
+    prefix any name: <em>red massive glowing bridge</em>
+  </div>
+  <div id="tint-row">
+    <span id="tint-label">tint</span>
+    <input type="color" id="obj-color" value="#ffffff">
+    <span id="tint-reset">no tint</span>
   </div>
   <div id="popup-buttons">
     <button id="placeBtn">place</button>
@@ -289,21 +457,18 @@
 
 <!-- Bottom bar -->
 <div id="ui">
-  <div class="slider-group">
-    <div class="slider-row">
-      <span class="slider-label">arousal</span>
-      <input type="range" id="s-arousal" min="0" max="1" step="0.01" value="0.5">
-      <span class="slider-val" id="v-arousal">0.50</span>
+  <div id="emo-pad-wrap">
+    <div id="emo-pad">
+      <span class="pad-axis-label top">intense</span>
+      <span class="pad-axis-label bottom">calm</span>
+      <span class="pad-axis-label left">neg</span>
+      <span class="pad-axis-label right">pos</span>
+      <div id="pad-dot"></div>
     </div>
-    <div class="slider-row">
-      <span class="slider-label">valence</span>
-      <input type="range" id="s-valence" min="0" max="1" step="0.01" value="0.5">
-      <span class="slider-val" id="v-valence">0.50</span>
-    </div>
-    <div class="slider-row">
-      <span class="slider-label">focus</span>
-      <input type="range" id="s-focus" min="0" max="1" step="0.01" value="0.5">
-      <span class="slider-val" id="v-focus">0.50</span>
+    <div class="focus-row">
+      <span class="focus-label">focus</span>
+      <input type="range" class="focus-slider" id="s-focus" min="0" max="1" step="0.01" value="0.5">
+      <span class="focus-val" id="v-focus">0.50</span>
     </div>
   </div>
 
@@ -316,6 +481,17 @@
 </div>
 
 <div id="loader">loading…</div>
+<p id="narration-text"></p>
+
+<div id="selection-panel">
+  <div id="selection-title">—</div>
+  <div class="sel-row">
+    <label>scale</label>
+    <input type="range" class="wp-slider" id="selection-scale" min="0.08" max="5" step="0.02" value="1" style="flex:1">
+    <span id="v-selection-scale" style="font-size:8px;color:#888;width:36px;text-align:right">1.00</span>
+  </div>
+  <button type="button" id="selection-clear">deselect</button>
+</div>
 
 <!-- ─────────────────────────────────────────────────────────────────────── -->
 <script type="importmap">
@@ -329,9 +505,10 @@
 
 <script type="module">
 import * as THREE from 'three';
-import { OrbitControls }   from 'three/addons/controls/OrbitControls.js';
+import { createOrbitRig, createPointerGroundFollow, startEyeGazeBridge, stopEyeGazeBridge } from './world-camera/index.js';
 import { GLTFLoader }      from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader }     from 'three/addons/loaders/DRACOLoader.js';
+import { Sky }             from 'three/addons/objects/Sky.js';
 import { EffectComposer }  from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass }      from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
@@ -385,11 +562,26 @@ const MODEL_MAP = {
   'low building b': `${PKG.com}/low-detail-building-b.glb`,
   'low building':   `${PKG.com}/low-detail-building-a.glb`,
   'wide building':  `${PKG.com}/low-detail-building-wide-a.glb`,
+  'wide building b': `${PKG.com}/low-detail-building-wide-b.glb`,
+  'low building c': `${PKG.com}/low-detail-building-c.glb`,
+  'low building d': `${PKG.com}/low-detail-building-d.glb`,
+  'low building e': `${PKG.com}/low-detail-building-e.glb`,
+  'low building f': `${PKG.com}/low-detail-building-f.glb`,
+  'low building g': `${PKG.com}/low-detail-building-g.glb`,
+  'low building h': `${PKG.com}/low-detail-building-h.glb`,
+  'low building i': `${PKG.com}/low-detail-building-i.glb`,
+  'low building j': `${PKG.com}/low-detail-building-j.glb`,
+  'low building k': `${PKG.com}/low-detail-building-k.glb`,
+  'low building l': `${PKG.com}/low-detail-building-l.glb`,
+  'low building m': `${PKG.com}/low-detail-building-m.glb`,
+  'low building n': `${PKG.com}/low-detail-building-n.glb`,
   // ── Commercial details ───────────────────────────────────────────────────
   'awning':       `${PKG.com}/detail-awning.glb`,
   'awning wide':  `${PKG.com}/detail-awning-wide.glb`,
   'overhang':     `${PKG.com}/detail-overhang.glb`,
   'parasol':      `${PKG.com}/detail-parasol-a.glb`,
+  'parasol b':    `${PKG.com}/detail-parasol-b.glb`,
+  'cafe':         `${PKG.com}/detail-parasol-a.glb`,
   // ── Industrial buildings (a–t) ───────────────────────────────────────────
   'industrial a':  `${PKG.ind}/building-a.glb`,
   'industrial b':  `${PKG.ind}/building-b.glb`,
@@ -454,9 +646,18 @@ const MODEL_MAP = {
   'planter':      `${PKG.sub}/planter.glb`,
   'fence':        `${PKG.sub}/fence.glb`,
   'fence low':    `${PKG.sub}/fence-low.glb`,
+  'fence long':   `${PKG.sub}/fence-1x4.glb`,
+  'fence wide':   `${PKG.sub}/fence-3x3.glb`,
+  'fence medium': `${PKG.sub}/fence-1x3.glb`,
+  'fence small':  `${PKG.sub}/fence-1x2.glb`,
+  'hedge fence':  `${PKG.sub}/fence-2x3.glb`,
   'driveway':     `${PKG.sub}/driveway-short.glb`,
+  'driveway long': `${PKG.sub}/driveway-long.glb`,
   'path':         `${PKG.sub}/path-short.glb`,
+  'path long':    `${PKG.sub}/path-long.glb`,
   'stone path':   `${PKG.sub}/path-stones-short.glb`,
+  'path stones long': `${PKG.sub}/path-stones-long.glb`,
+  'path messy':   `${PKG.sub}/path-stones-messy.glb`,
   // ── Roads ────────────────────────────────────────────────────────────────
   'road':             `${PKG.rd}/road-straight.glb`,
   'road straight':    `${PKG.rd}/road-straight.glb`,
@@ -502,6 +703,11 @@ const MODEL_MAP = {
 // ═══════════════════════════════════════════════════════════════════════════
 const emotion = { arousal: 0.5, valence: 0.5, focus: 0.5 };
 
+// User sky colour picks (fog / ambient tint); blend strength from world panel
+const userSkyZenith  = new THREE.Color(0xa8d0f0);
+const userSkyHorizon = new THREE.Color(0xe8f4ff);
+let   skyTintBlend   = 0.35;
+
 // Scene registry
 const placedObjects = [];   // THREE.Object3D[]
 const placedNames   = [];   // string[]
@@ -527,30 +733,18 @@ scene.background = new THREE.Color(0xffffff);
 scene.fog        = new THREE.FogExp2(0xffffff, 0.018);
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Camera
+// Camera + orbit — world-camera/orbit.js
 // ═══════════════════════════════════════════════════════════════════════════
-const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 600);
-camera.position.set(10, 7, 14);
-camera.lookAt(0, 0, 0);
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Orbit Controls
-// ═══════════════════════════════════════════════════════════════════════════
-const controls = new OrbitControls(camera, canvas);
-controls.enableDamping  = true;
-controls.dampingFactor  = 0.055;
-controls.minDistance    = 2;
-controls.maxDistance    = 150;
-controls.maxPolarAngle  = Math.PI / 2 - 0.04;
-controls.screenSpacePanning = false;
+const { camera, controls } = createOrbitRig(canvas);
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Lighting
 // ═══════════════════════════════════════════════════════════════════════════
-const ambientLight = new THREE.AmbientLight(0xffffff, 1.8);
+const ambientLight = new THREE.AmbientLight(0xf5ebe3, 0.85);
 scene.add(ambientLight);
 
-const dirLight = new THREE.DirectionalLight(0x2244ff, 3.5);
+// Key light — warm daylight (avoid pure white / neon blue; keeps ground readable)
+const dirLight = new THREE.DirectionalLight(0xffecd8, 2.35);
 dirLight.position.set(18, 35, 12);
 dirLight.castShadow           = true;
 dirLight.shadow.mapSize.width  = 2048;
@@ -565,22 +759,22 @@ dirLight.shadow.bias          = -0.0005;
 dirLight.shadow.normalBias    = 0.02;
 scene.add(dirLight);
 
-// Cold fill from below / back
-const fillLight = new THREE.DirectionalLight(0x0a1430, 0.9);
+// Soft fill from below — low so it does not flatten contrast
+const fillLight = new THREE.DirectionalLight(0x1a2840, 0.42);
 fillLight.position.set(-8, 3, -15);
 scene.add(fillLight);
 
-// Distant atmospheric rim points — neon city glow
+// Distant rim — subtle; strong lights were washing the scene
 const rimDefs = [
-  { color: 0x0030ff, dist: 55 },
-  { color: 0xff1a00, dist: 65 },
-  { color: 0x8800cc, dist: 50 },
-  { color: 0x00ccaa, dist: 70 },
-  { color: 0xcc4400, dist: 60 },
-  { color: 0x0088ff, dist: 75 },
+  { color: 0x4060a0, dist: 55 },
+  { color: 0xc06040, dist: 65 },
+  { color: 0x7050a0, dist: 50 },
+  { color: 0x408888, dist: 70 },
+  { color: 0xa06040, dist: 60 },
+  { color: 0x5080b0, dist: 75 },
 ];
 rimDefs.forEach((def, i) => {
-  const pt = new THREE.PointLight(def.color, 1.2, 100, 1.5);
+  const pt = new THREE.PointLight(def.color, 0.48, 100, 1.8);
   const angle = (i / rimDefs.length) * Math.PI * 2;
   pt.position.set(Math.cos(angle) * def.dist, 1, Math.sin(angle) * def.dist);
   scene.add(pt);
@@ -591,7 +785,7 @@ rimDefs.forEach((def, i) => {
 // ═══════════════════════════════════════════════════════════════════════════
 const groundGeo = new THREE.PlaneGeometry(300, 300, 60, 60);
 const groundMat = new THREE.MeshStandardMaterial({
-  color:     0xe8e8ec,
+  color:     0x0d0d12,
   roughness: 0.97,
   metalness: 0.03,
 });
@@ -601,10 +795,67 @@ ground.receiveShadow = true;
 ground.name          = '__ground__';
 scene.add(ground);
 
-// Subtle grid overlay
-const gridHelper = new THREE.GridHelper(300, 120, 0x080810, 0x080810);
-gridHelper.position.y = 0.002;
-scene.add(gridHelper);
+// Shared raycast + ground pointer (mouse / gaze / gamepad) — world-camera/pointer-follow.js
+const raycaster = new THREE.Raycaster();
+const { cursorLight, cursorDisc, updatePointerFollow } = createPointerGroundFollow({
+  scene, camera, ground, raycaster, canvas,
+});
+
+// ── World grid — anti-aliased shader grid, infinite perspective look ──────────
+const worldGridMat = new THREE.ShaderMaterial({
+  uniforms: {
+    uColor:      { value: new THREE.Color(0.13, 0.16, 0.30) },
+    uAccent:     { value: new THREE.Color(0.22, 0.28, 0.55) },
+    uFade:       { value: 85.0 },
+    uIntensity:  { value: 0.85 },
+  },
+  vertexShader: /* glsl */`
+    varying vec3 vWorldPos;
+    void main() {
+      vec4 wp = modelMatrix * vec4(position, 1.0);
+      vWorldPos = wp.xyz;
+      gl_Position = projectionMatrix * viewMatrix * wp;
+    }
+  `,
+  fragmentShader: /* glsl */`
+    uniform vec3  uColor;
+    uniform vec3  uAccent;
+    uniform float uFade;
+    uniform float uIntensity;
+    varying vec3  vWorldPos;
+
+    float gridLine(float coord, float spacing, float lw) {
+      float f  = mod(abs(coord), spacing);
+      float hf = min(f, spacing - f);
+      float aa = fwidth(coord) * 1.5;
+      return 1.0 - smoothstep(lw - aa, lw + aa, hf);
+    }
+
+    void main() {
+      float major = max(gridLine(vWorldPos.x, 5.0, 0.06),
+                        gridLine(vWorldPos.z, 5.0, 0.06));
+      float minor = max(gridLine(vWorldPos.x, 1.0, 0.018),
+                        gridLine(vWorldPos.z, 1.0, 0.018));
+      float grid  = max(major, minor * 0.28);
+
+      float dist  = length(vWorldPos.xz);
+      float fade  = 1.0 - smoothstep(uFade * 0.28, uFade, dist);
+
+      float alpha = grid * fade;
+      if (alpha < 0.004) discard;
+
+      vec3 col = mix(uColor, uAccent, major * 0.75);
+      gl_FragColor = vec4(col, alpha * 0.88 * uIntensity);
+    }
+  `,
+  transparent: true,
+  depthWrite:  false,
+  blending:    THREE.AdditiveBlending,
+});
+const worldGrid = new THREE.Mesh(new THREE.PlaneGeometry(800, 800), worldGridMat);
+worldGrid.rotation.x = -Math.PI / 2;
+worldGrid.position.y = 0.003;
+scene.add(worldGrid);
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Post-processing
@@ -730,106 +981,288 @@ function createFallbackObject(name) {
 }
 
 // ─── Darken & stylise loaded GLTF materials ─────────────────────────────────
-function styliseMaterials(object) {
+// ═══════════════════════════════════════════════════════════════════════════
+// Label parser  — extracts color / size / material hints from free text
+// e.g. "massive red glowing bridge" → { base: "bridge", color, size, ... }
+// ═══════════════════════════════════════════════════════════════════════════
+const COLOR_NAMES = {
+  red:'#dd2200', crimson:'#8b0000', scarlet:'#ff2400', coral:'#ff6644',
+  orange:'#ff6600', amber:'#ffaa00', gold:'#ffd700', yellow:'#ddcc00',
+  lime:'#88cc00', green:'#228822', emerald:'#00aa55', teal:'#008080',
+  cyan:'#00aacc', sky:'#55aaee', blue:'#2244cc', navy:'#001880',
+  indigo:'#3300aa', violet:'#7700cc', purple:'#6600aa',
+  magenta:'#cc0088', pink:'#ff66aa', rose:'#ee4466',
+  white:'#f8f8f8', grey:'#888888', gray:'#888888', silver:'#aaaaaa',
+  black:'#0a0a0a', brown:'#664422', rust:'#aa4422', neon:'#00ffaa',
+};
+const SIZE_NAMES = {
+  tiny:0.35, small:0.55, little:0.5,
+  large:1.6, big:1.5, huge:2.0, massive:2.4, giant:2.2, tall:1.4,
+};
+const MAT_NAMES = {
+  glass:   { roughness:0.05, metalness:0.0, opacity:0.35, transparent:true },
+  metal:   { roughness:0.2,  metalness:0.9 },
+  metallic:{ roughness:0.25, metalness:0.85 },
+  rusty:   { roughness:0.95, metalness:0.5, colorOverride:'#7a3a18' },
+  wooden:  { roughness:0.92, metalness:0.0 },
+  concrete:{ roughness:0.97, metalness:0.0 },
+  glowing: { emissiveIntensity:0.7 },
+  neon:    { emissiveIntensity:1.0 },
+  shiny:   { roughness:0.08, metalness:0.4 },
+  matte:   { roughness:0.99, metalness:0.0 },
+  dark:    { brightnessMult:0.3 },
+  bright:  { brightnessMult:1.6 },
+};
+
+function parseLabel(raw) {
+  const tokens = raw.trim().toLowerCase().split(/\s+/);
+  let color = null, size = null, matHints = {}, rest = [];
+  for (const t of tokens) {
+    if (COLOR_NAMES[t])      { color = COLOR_NAMES[t]; }
+    else if (SIZE_NAMES[t])  { size  = SIZE_NAMES[t];  }
+    else if (MAT_NAMES[t])   { Object.assign(matHints, MAT_NAMES[t]); }
+    else                     { rest.push(t); }
+  }
+  const base = rest.join(' ') || raw.trim().toLowerCase();
+  return { base, color, size, matHints, raw };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Material application — full override from parameter object
+// ═══════════════════════════════════════════════════════════════════════════
+function applyMaterialParams(object, params) {
   object.traverse(child => {
     if (!child.isMesh) return;
+    // Clone materials so shared mats don't bleed across instances
+    if (Array.isArray(child.material)) {
+      child.material = child.material.map(m => m.clone());
+    } else {
+      child.material = child.material.clone();
+    }
     child.castShadow    = true;
     child.receiveShadow = true;
 
     const mats = Array.isArray(child.material) ? child.material : [child.material];
     mats.forEach(mat => {
-      // preserve original model colors
-      mat.roughness       = Math.max(mat.roughness ?? 1, 0.72);
-      mat.emissive        = new THREE.Color(0, 0, 0);
+      if (params.color)        mat.color.set(params.color);
+      if (params.colorOverride) mat.color.set(params.colorOverride);
+      if (params.brightnessMult !== undefined) mat.color.multiplyScalar(params.brightnessMult);
+
+      if (params.emissive)     mat.emissive = new THREE.Color(params.emissive);
+      if (params.emissiveIntensity !== undefined) {
+        mat.emissiveIntensity = params.emissiveIntensity;
+        // Auto-set emissive to match color if not explicitly given
+        if (!params.emissive && params.color) mat.emissive.set(params.color);
+      }
+      if (params.roughness != null) mat.roughness = params.roughness;
+      if (params.metalness != null) mat.metalness = params.metalness;
+      if (params.opacity   != null && params.opacity < 1.0) {
+        mat.opacity     = params.opacity;
+        mat.transparent = true;
+      }
+      mat.needsUpdate = true;
+    });
+  });
+
+  if (params.scale)  object.scale.setScalar(params.scale);
+
+  if (params.pointLight) {
+    const pl = new THREE.PointLight(
+      params.pointLight.color     ?? '#ffffff',
+      params.pointLight.intensity ?? 1.0,
+      params.pointLight.distance  ?? 10,
+      1.5
+    );
+    pl.position.set(0, 1.2, 0);
+    object.add(pl);
+  }
+}
+
+/** Multiplies uniform scale after LLM / local material params (placement slider). */
+function applyUserPlaceScale(root, parsed) {
+  const u = parsed?.userScale;
+  if (u == null || Number.isNaN(u) || u <= 0) return;
+  root.scale.multiplyScalar(u);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// LLM stub — replace this fetch with real GPT-4o call when backend is ready
+// ═══════════════════════════════════════════════════════════════════════════
+const BACKEND = 'http://localhost:8000';
+let backendOnline = false;
+
+// Test if backend is reachable
+fetch(`${BACKEND}/health`, { signal: AbortSignal.timeout(1500) })
+  .then(() => { backendOnline = true; console.log('[Backend] online'); })
+  .catch(() => { console.log('[Backend] offline — using local material generation'); });
+
+async function getLLMMaterials(parsed, emo) {
+  if (backendOnline) {
+    try {
+      const res = await fetch(`${BACKEND}/api/place`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          label:      parsed.raw,
+          base_label: parsed.base,
+          hints:      { color: parsed.color, size: parsed.size, material: parsed.matHints },
+          emotion:    emo,
+          mood:       document.getElementById('mood-state').textContent,
+        }),
+      });
+      const data = await res.json();
+      if (data.narration)   showNarration(data.narration);
+      if (data.audio_b64)   playAudio(data.audio_b64);
+      return data.material_params;
+    } catch (e) {
+      console.warn('[Backend] request failed, using local fallback', e);
+    }
+  }
+  // ── Local fallback — emotion-driven procedural materials ──────────────
+  return buildLocalParams(parsed, emo);
+}
+
+function buildLocalParams(parsed, emo) {
+  const { arousal, valence, focus } = emo;
+
+  // Only override color when the user explicitly asked for one
+  const baseColor = parsed.color ?? null;
+
+  // Subtle emissive tint from arousal — red at high arousal
+  const ei = arousal * 0.18;
+  const emissiveHex = baseColor
+    ? baseColor
+    : `rgb(${Math.round(arousal * 60)},0,0)`;
+
+  // Scale: from size hint or slight emotion variation
+  const scale = (parsed.size ?? (0.9 + Math.random() * 0.4)) * (1 + arousal * 0.1);
+
+  // Point light only when user asked for glowing/neon material
+  const wantsLight = (parsed.matHints.emissiveIntensity ?? 0) > 0.4;
+
+  const params = {
+    // color: only set if explicitly given — otherwise keep model's original
+    emissive:          emissiveHex,
+    emissiveIntensity: ei,
+    // Roughness/metalness adjusted gently by focus — don't clobber model defaults
+    roughness: parsed.matHints.roughness !== undefined
+      ? parsed.matHints.roughness
+      : undefined,   // undefined = don't override
+    metalness: parsed.matHints.metalness !== undefined
+      ? parsed.matHints.metalness
+      : undefined,
+    scale,
+    pointLight: wantsLight ? {
+      color:     baseColor ?? '#ffccaa',
+      intensity: 0.8 + arousal * 1.2,
+      distance:  8 + focus * 8,
+    } : null,
+    ...parsed.matHints,  // explicit mat overrides win
+  };
+
+  // Only inject color if one was parsed
+  if (baseColor) params.color = baseColor;
+  return params;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Narration overlay
+// ═══════════════════════════════════════════════════════════════════════════
+function showNarration(text) {
+  const el = document.getElementById('narration-text');
+  el.textContent = text;
+  el.style.opacity = '1';
+  clearTimeout(el._timer);
+  el._timer = setTimeout(() => { el.style.opacity = '0'; }, 5000);
+}
+
+function playAudio(b64) {
+  try {
+    const bytes = atob(b64);
+    const arr   = new Uint8Array(bytes.length);
+    for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+    const url   = URL.createObjectURL(new Blob([arr], { type: 'audio/mpeg' }));
+    const audio = new Audio(url);
+    audio.play();
+    audio.onended = () => URL.revokeObjectURL(url);
+  } catch(e) { console.warn('[Audio]', e); }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Core placement — stylise base, then apply LLM/local material params
+// ═══════════════════════════════════════════════════════════════════════════
+const loaderEl = document.getElementById('loader');
+
+function prepareBaseMaterials(object) {
+  // Ensure every mesh has its own cloned material and shadows enabled.
+  // Don't change colors yet — that comes from applyMaterialParams.
+  object.traverse(child => {
+    if (!child.isMesh) return;
+    child.castShadow    = true;
+    child.receiveShadow = true;
+    if (Array.isArray(child.material)) {
+      child.material = child.material.map(m => m.clone());
+    } else {
+      child.material = child.material.clone();
+    }
+    const mats = Array.isArray(child.material) ? child.material : [child.material];
+    mats.forEach(mat => {
+      mat.emissive          = new THREE.Color(0, 0, 0);
       mat.emissiveIntensity = 1.0;
-      mat.needsUpdate     = true;
+      mat.needsUpdate       = true;
     });
   });
 }
 
-// ─── Load or generate a model and place it in the scene ─────────────────────
-const loaderEl = document.getElementById('loader');
+function _loadModel(name, position, parsed) {
+  const key  = parsed.base.trim().toLowerCase();
+  const file = MODEL_MAP[key] ?? MODEL_MAP[name.trim().toLowerCase()] ?? null;
 
-function placeObject(name, position) {
-  const key  = name.trim().toLowerCase();
-  const file = MODEL_MAP[key] ?? null;
-
-  const commit = (root) => {
+  const commit = async (root) => {
     root.userData.objectName = name;
+    root.userData.parsed     = parsed;
 
-    // Random variation — no two identical
-    const scale = 0.78 + Math.random() * 0.54;
-    root.scale.setScalar(scale);
+    // Temp natural scale + random rotation
+    const tempScale = parsed.size ?? (0.85 + Math.random() * 0.45);
+    root.scale.setScalar(tempScale);
     root.position.copy(position);
     root.rotation.y = Math.random() * Math.PI * 2;
-    // Tiny tilt for organic feel
-    root.rotation.z = (Math.random() - 0.5) * 0.012;
+    root.rotation.z = (Math.random() - 0.5) * 0.01;
 
     scene.add(root);
     placedObjects.push(root);
     placedNames.push(name);
     refreshObjectList();
-    applyEmotion();           // tint the new object immediately
     loaderEl.style.display = 'none';
+
+    // Fetch LLM material params (async, non-blocking for placement)
+    const params = await getLLMMaterials(parsed, { ...emotion });
+    applyMaterialParams(root, params);
+    applyUserPlaceScale(root, parsed);
+    applyEmotion();
   };
 
   if (file) {
     loaderEl.style.display = 'block';
     gltfLoader.load(
       `/assets/${file}`,
-      (gltf) => {
-        styliseMaterials(gltf.scene);
-        commit(gltf.scene);
-      },
+      (gltf) => { prepareBaseMaterials(gltf.scene); commit(gltf.scene); },
       undefined,
-      (err) => {
-        console.warn(`[DCV] Model not found (${file}), generating fallback.`, err);
-        commit(createFallbackObject(name));
-      }
+      (err) => { console.warn(`[DCV] ${file} not found, using fallback.`, err); commit(createFallbackObject(name)); }
     );
   } else {
-    console.info(`[DCV] No mapping for "${name}", generating fallback.`);
+    console.info(`[DCV] No mapping for "${key}", using fallback.`);
     commit(createFallbackObject(name));
   }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Cursor light — follows mouse on ground plane
-// ═══════════════════════════════════════════════════════════════════════════
-const cursorLight = new THREE.PointLight(0x6688cc, 2.5, 18, 2);
-cursorLight.position.set(0, 0.6, 0);
-scene.add(cursorLight);
-
-// Small emissive disc so the light source is faintly visible
-const cursorDiscGeo = new THREE.CircleGeometry(0.18, 32);
-const cursorDiscMat = new THREE.MeshBasicMaterial({ color: 0x8899cc, transparent: true, opacity: 0.25 });
-const cursorDisc    = new THREE.Mesh(cursorDiscGeo, cursorDiscMat);
-cursorDisc.rotation.x = -Math.PI / 2;
-cursorDisc.position.y = 0.003;
-scene.add(cursorDisc);
-
-// ═══════════════════════════════════════════════════════════════════════════
 // Raycast + Popup
 // ═══════════════════════════════════════════════════════════════════════════
-const raycaster  = new THREE.Raycaster();
 const mouseNDC   = new THREE.Vector2();
 let   pendingPos = null;
 let   popupOpen  = false;
 let   mouseDownXY = { x: 0, y: 0 };
-
-// Track cursor world position for the light
-const _cursorNDC = new THREE.Vector2();
-canvas.addEventListener('mousemove', (e) => {
-  _cursorNDC.x =  (e.clientX / window.innerWidth)  * 2 - 1;
-  _cursorNDC.y = -(e.clientY / window.innerHeight)  * 2 + 1;
-  raycaster.setFromCamera(_cursorNDC, camera);
-  const hits = raycaster.intersectObject(ground, false);
-  if (hits.length > 0) {
-    const p = hits[0].point;
-    cursorLight.position.set(p.x, 0.6, p.z);
-    cursorDisc.position.set(p.x, 0.003, p.z);
-  }
-});
 
 const popup       = document.getElementById('popup');
 const objectInput = document.getElementById('objectInput');
@@ -840,10 +1273,41 @@ canvas.addEventListener('mousedown', (e) => {
   mouseDownXY = { x: e.clientX, y: e.clientY };
 });
 
+let selectedPlacedRoot = null;
+
+function findPlacedRoot(hitObj) {
+  let o = hitObj;
+  while (o) {
+    if (placedObjects.includes(o)) return o;
+    o = o.parent;
+  }
+  return null;
+}
+
+function clearPlacedSelection() {
+  selectedPlacedRoot = null;
+  const pan = document.getElementById('selection-panel');
+  if (pan) { pan.classList.remove('open'); }
+}
+
+function selectPlacedObject(root) {
+  selectedPlacedRoot = root;
+  const pan   = document.getElementById('selection-panel');
+  const title = document.getElementById('selection-title');
+  const slid  = document.getElementById('selection-scale');
+  const vlab  = document.getElementById('v-selection-scale');
+  if (!pan || !slid) return;
+  const name = root.userData.objectName || 'object';
+  if (title) title.textContent = name.length > 42 ? name.slice(0, 40) + '…' : name;
+  const s = root.scale.x;
+  slid.value = String(THREE.MathUtils.clamp(s, 0.08, 5));
+  if (vlab) vlab.textContent = s.toFixed(2);
+  pan.classList.add('open');
+}
+
 canvas.addEventListener('click', (e) => {
   if (popupOpen) return;
 
-  // Ignore drag
   const dx = e.clientX - mouseDownXY.x;
   const dy = e.clientY - mouseDownXY.y;
   if (Math.hypot(dx, dy) > 6) return;
@@ -852,8 +1316,21 @@ canvas.addEventListener('click', (e) => {
   mouseNDC.y = -(e.clientY / window.innerHeight)  * 2 + 1;
 
   raycaster.setFromCamera(mouseNDC, camera);
-  const hits = raycaster.intersectObject(ground, false);
 
+  if (placedObjects.length) {
+    const objHits = raycaster.intersectObjects(placedObjects, true);
+    if (objHits.length > 0) {
+      const root = findPlacedRoot(objHits[0].object);
+      if (root) {
+        selectPlacedObject(root);
+        return;
+      }
+    }
+  }
+
+  clearPlacedSelection();
+
+  const hits = raycaster.intersectObject(ground, false);
   if (hits.length > 0) {
     pendingPos = hits[0].point.clone();
     openPopup(e.clientX, e.clientY);
@@ -864,7 +1341,7 @@ function openPopup(cx, cy) {
   popupOpen        = true;
   controls.enabled = false;
 
-  const pw = 260, ph = 120;
+  const pw = 280, ph = 210;
   const uiH = 80;  // approximate bottom bar height
   const px = Math.min(cx + 12, window.innerWidth  - pw - 8);
   const py = Math.min(cy + 12, window.innerHeight - ph - uiH - 8);
@@ -873,6 +1350,8 @@ function openPopup(cx, cy) {
   popup.style.top     = py + 'px';
   popup.style.display = 'block';
   objectInput.value   = '';
+  const preview = document.getElementById('parse-preview');
+  if (preview) preview.style.display = 'none';
   setTimeout(() => objectInput.focus(), 40);
 }
 
@@ -884,8 +1363,16 @@ function closePopup() {
 }
 
 placeBtn.addEventListener('click', () => {
-  const name = objectInput.value.trim();
-  if (name && pendingPos) placeObject(name, pendingPos.clone());
+  const raw = objectInput.value.trim();
+  if (raw && pendingPos) {
+    clearPlacedSelection();
+    const parsed = parseLabel(raw);
+    const pickerColor = document.getElementById('obj-color').value;
+    if (pickerColor !== '#ffffff') parsed.color = pickerColor;
+    const ps = document.getElementById('place-scale');
+    parsed.userScale = ps ? parseFloat(ps.value) : 1;
+    placeObject(raw, pendingPos.clone(), parsed);
+  }
   closePopup();
 });
 
@@ -896,10 +1383,62 @@ objectInput.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') closePopup();
 });
 
+function updateParsePreview() {
+  const raw = objectInput.value.trim();
+  const preview = document.getElementById('parse-preview');
+  if (!raw) { preview.style.display = 'none'; return; }
+
+  const p = parseLabel(raw);
+  const chips = [];
+  chips.push(`<span class="parse-chip chip-base">${p.base || '—'}</span>`);
+  if (p.color) {
+    chips.push(`<span class="parse-chip chip-color" style="background:${p.color}">● ${p.color}</span>`);
+    document.getElementById('obj-color').value = p.color;
+  }
+  if (p.size) {
+    chips.push(`<span class="parse-chip chip-size">text ×${p.size}</span>`);
+  }
+  const psz = document.getElementById('place-scale');
+  if (psz) {
+    chips.push(`<span class="parse-chip chip-size">place ×${parseFloat(psz.value).toFixed(2)}</span>`);
+  }
+  const matKeys = Object.keys(p.matHints);
+  if (matKeys.length) {
+    chips.push(`<span class="parse-chip chip-material">${matKeys.join(' ')}</span>`);
+  }
+  preview.innerHTML = chips.join('');
+  preview.style.display = 'block';
+}
+
+objectInput.addEventListener('input', updateParsePreview);
+document.getElementById('place-scale')?.addEventListener('input', function () {
+  const v = document.getElementById('v-place-scale');
+  if (v) v.textContent = `${parseFloat(this.value).toFixed(2)}×`;
+  updateParsePreview();
+});
+
 // Clicking outside popup closes it
 document.addEventListener('mousedown', (e) => {
   if (popupOpen && !popup.contains(e.target) && e.target !== canvas) {
     closePopup();
+  }
+});
+
+document.getElementById('selection-scale')?.addEventListener('input', function () {
+  if (!selectedPlacedRoot) return;
+  const v = parseFloat(this.value);
+  selectedPlacedRoot.scale.setScalar(v);
+  const lab = document.getElementById('v-selection-scale');
+  if (lab) lab.textContent = v.toFixed(2);
+});
+
+document.getElementById('selection-clear')?.addEventListener('click', () => {
+  clearPlacedSelection();
+});
+
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !popupOpen && selectedPlacedRoot) {
+    clearPlacedSelection();
   }
 });
 
@@ -936,21 +1475,23 @@ function refreshObjectList() {
 // ═══════════════════════════════════════════════════════════════════════════
 const _fogLow  = new THREE.Color(0xfff0e8);  // warm white / amber
 const _fogHigh = new THREE.Color(0xe8f0ff);  // cool white / blue
-const _ltWarm  = new THREE.Color(0xff5010);  // warm directional
-const _ltCool  = new THREE.Color(0x1840ff);  // cold directional
+const _ltWarm  = new THREE.Color(0xffe4c4);  // honey sun
+const _ltCool  = new THREE.Color(0xb8d4f8);  // soft sky (not saturated blue)
 
 function applyEmotion() {
   const { arousal, valence, focus } = emotion;
 
-  // ── Fog ─────────────────────────────────────────────────────────────────
-  scene.fog.density = 0.006 + arousal * 0.034;
+  // ── Fog — user density slider × emotion; horizon colour tints fog ────────
+  const fogEl = document.getElementById('fog-slider');
+  const fogSlide = fogEl ? parseFloat(fogEl.value) : 0.3;
+  scene.fog.density = (0.004 + arousal * 0.028) * (0.28 + fogSlide * 1.35);
   const fc = new THREE.Color().lerpColors(_fogLow, _fogHigh, valence);
+  if (skyTintBlend > 0.001) fc.lerp(userSkyHorizon, skyTintBlend * 0.55);
   scene.fog.color.copy(fc);
-  scene.background.copy(fc);
 
-  // ── Directional light temperature ───────────────────────────────────────
+  // ── Directional light — stays in a natural daylight range (no harsh white) ─
   dirLight.color.lerpColors(_ltWarm, _ltCool, valence);
-  dirLight.intensity = 2.5 + arousal * 1.5;
+  dirLight.intensity = 1.55 + arousal * 0.95;
 
   // ── Ambient tint ─────────────────────────────────────────────────────────
   const ambHue = new THREE.Color().lerpColors(
@@ -958,6 +1499,7 @@ function applyEmotion() {
     new THREE.Color(0.88, 0.93, 1.0),   // cool white
     valence
   );
+  if (skyTintBlend > 0.001) ambHue.lerp(userSkyZenith, skyTintBlend * 0.1);
   ambientLight.color.copy(ambHue);
 
   // ── Emissive tint on all placed objects ─────────────────────────────────
@@ -979,16 +1521,16 @@ function applyEmotion() {
     });
   });
 
-  // ── Bloom — focus sharpens / intensifies ────────────────────────────────
-  bloomPass.strength  = 0.25 + focus * 2.2;
-  bloomPass.threshold = 0.88 - focus * 0.40;
-  bloomPass.radius    = 0.55 - focus * 0.32;
+  // ── Bloom — toned down so highlights stay legible (less milky haze) ─────
+  bloomPass.strength  = 0.14 + focus * 1.35;
+  bloomPass.threshold = 0.91 - focus * 0.28;
+  bloomPass.radius    = 0.48 - focus * 0.26;
 
   // ── Grain — arousal feeds noise ─────────────────────────────────────────
   grainPass.uniforms.intensity.value = 0.02 + arousal * 0.075;
 
-  // ── Cursor light — temperature tracks valence, intensity tracks arousal ──
-  cursorLight.color.lerpColors(_ltWarm, _ltCool, valence);
+  // ── Cursor light — white; intensity / distance still follow mood ──
+  cursorLight.color.setHex(0xffffff);
   cursorLight.intensity = 1.8 + arousal * 2.2;
   cursorLight.distance  = 12 + focus * 10;
 }
@@ -1046,16 +1588,12 @@ function updateMoodDisplay() {
   moodSubEl.style.color = `rgb(${sr},${sg},${sb})`;
 }
 
-// ─── Slider wiring ──────────────────────────────────────────────────────────
-['arousal', 'valence', 'focus'].forEach(key => {
-  const slider  = document.getElementById(`s-${key}`);
-  const display = document.getElementById(`v-${key}`);
-  slider.addEventListener('input', () => {
-    emotion[key]        = parseFloat(slider.value);
-    display.textContent = emotion[key].toFixed(2);
-    applyEmotion();
-    updateMoodDisplay();
-  });
+// ─── Focus slider wiring (arousal + valence come from 2D pad) ───────────────
+document.getElementById('s-focus').addEventListener('input', function () {
+  emotion.focus = parseFloat(this.value);
+  document.getElementById('v-focus').textContent = emotion.focus.toFixed(2);
+  applyEmotion();
+  updateMoodDisplay();
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1068,6 +1606,862 @@ window.addEventListener('resize', () => {
   composer.setSize(window.innerWidth, window.innerHeight);
   bloomPass.resolution.set(window.innerWidth, window.innerHeight);
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════
+// Atmospheric sky (Three.js Sky — Preetham model)
+// ═══════════════════════════════════════════════════════════════════════════
+renderer.toneMapping         = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 0.52;
+
+const sky = new Sky();
+sky.scale.setScalar(10000);
+scene.add(sky);
+scene.background = null;
+
+const sunPos    = new THREE.Vector3();
+const skyParams = { turbidity: 6, rayleigh: 1.2, mieCoeff: 0.003, mieG: 0.85, elevation: 18, azimuth: 200 };
+
+const SKY_PRESETS = {
+  day:     { turbidity: 5,  rayleigh: 1.0, mieCoeff: 0.002, mieG: 0.85, elevation: 35, azimuth: 200 },
+  golden:  { turbidity: 12, rayleigh: 2.5, mieCoeff: 0.008, mieG: 0.88, elevation:  4, azimuth: 175 },
+  dusk:    { turbidity: 20, rayleigh: 4.0, mieCoeff: 0.01,  mieG: 0.90, elevation: -1, azimuth: 160 },
+  night:   { turbidity: 1,  rayleigh: 0.1, mieCoeff: 0.001, mieG: 0.75, elevation:-10, azimuth: 200 },
+  overcast:{ turbidity: 20, rayleigh: 4.0, mieCoeff: 0.02,  mieG: 0.70, elevation: 20, azimuth: 200 },
+  dream:   { turbidity: 8,  rayleigh: 2.0, mieCoeff: 0.005, mieG: 0.82, elevation: 28, azimuth: 220 },
+};
+
+function applySkyParams() {
+  const u = sky.material.uniforms;
+  u.turbidity.value           = skyParams.turbidity;
+  u.rayleigh.value            = skyParams.rayleigh;
+  u.mieCoefficient.value      = skyParams.mieCoeff;
+  u.mieDirectionalG.value     = skyParams.mieG;
+  const phi   = THREE.MathUtils.degToRad(90 - skyParams.elevation);
+  const theta = THREE.MathUtils.degToRad(skyParams.azimuth);
+  sunPos.setFromSphericalCoords(1, phi, theta);
+  u.sunPosition.value.copy(sunPos);
+
+  // Sync directional light to sun
+  dirLight.position.copy(sunPos).multiplyScalar(60);
+
+  // Approximate horizon fog color from elevation
+  const t = Math.max(0, Math.sin(THREE.MathUtils.degToRad(skyParams.elevation)));
+  scene.fog.color.lerpColors(new THREE.Color(0x050510), new THREE.Color(0xc8ddf0), t);
+
+  // Stars visible at night
+  starField.visible = skyParams.elevation < 5;
+  starField.material.opacity = Math.max(0, Math.min(1, (5 - skyParams.elevation) / 15));
+
+  // Sync world-panel sliders / labels (optional DOM)
+  const elE = document.getElementById('sun-elevation');
+  if (elE) elE.value = String(Math.round(skyParams.elevation));
+  const elAz = document.getElementById('sky-azimuth');
+  if (elAz) elAz.value = String(Math.round(skyParams.azimuth));
+  const elT = document.getElementById('sky-turbidity');
+  if (elT) elT.value = String(skyParams.turbidity);
+  const vEl = document.getElementById('v-sun-el');
+  if (vEl) vEl.textContent = `${Math.round(skyParams.elevation)}°`;
+  const vAz = document.getElementById('v-sun-az');
+  if (vAz) vAz.textContent = `${Math.round(skyParams.azimuth)}°`;
+  const vT = document.getElementById('v-turbidity');
+  if (vT) vT.textContent = Number(skyParams.turbidity).toFixed(1);
+
+  updateSunDiscAppearance();
+}
+
+function setSkyPreset(name) {
+  Object.assign(skyParams, SKY_PRESETS[name] ?? {});
+  applySkyParams();
+}
+
+// ── Starfield ────────────────────────────────────────────────────────────
+const starGeo  = new THREE.BufferGeometry();
+const starVerts = [];
+for (let i = 0; i < 2000; i++) {
+  const theta = Math.random() * Math.PI * 2;
+  const phi   = Math.acos(2 * Math.random() - 1);
+  const r     = 4000;
+  starVerts.push(r * Math.sin(phi) * Math.cos(theta), r * Math.cos(phi), r * Math.sin(phi) * Math.sin(theta));
+}
+starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starVerts, 3));
+const starField = new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0xffffff, size: 2.5, sizeAttenuation: false, transparent: true, opacity: 0 }));
+scene.add(starField);
+
+// ── Visible sun disc (billboard) — warm colours, matches sky sun direction ────
+function createSunDisc() {
+  const group = new THREE.Group();
+  group.name = 'sunDisc';
+  const mk = (r, hex, op, order, blend) => {
+    const m = new THREE.MeshBasicMaterial({
+      color: hex,
+      transparent: true,
+      opacity: op,
+      depthWrite: false,
+      depthTest: false,
+      blending: blend ?? THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+    });
+    const mesh = new THREE.Mesh(new THREE.CircleGeometry(r, 56), m);
+    mesh.renderOrder = order;
+    return mesh;
+  };
+  // Far distance + modest radii ≈ real solar disc angular size (~0.5°); reads as “very far”
+  const glowO = mk(58, 0xff7722, 0.14, 998);
+  const glowM = mk(30, 0xffb060, 0.26, 999);
+  const core  = mk(11, 0xfff2dd, 0.82, 1000, THREE.NormalBlending);
+  group.add(glowO, glowM, core);
+  group.userData = { dist: 32000, glowO, glowM, core };
+  return group;
+}
+const sunDiscGroup = createSunDisc();
+scene.add(sunDiscGroup);
+
+function updateSunDiscAppearance() {
+  const elev = skyParams.elevation;
+  sunDiscGroup.visible = elev > -4;
+  if (!sunDiscGroup.visible) return;
+  sunDiscGroup.position.copy(sunPos).multiplyScalar(sunDiscGroup.userData.dist);
+  const bigWhenLow = THREE.MathUtils.clamp(1.22 - elev / 85, 0.72, 1.35);
+  sunDiscGroup.scale.setScalar(bigWhenLow);
+  const day = THREE.MathUtils.smoothstep(elev, -2, 38);
+  const { glowO, glowM, core } = sunDiscGroup.userData;
+  glowO.material.color.setHSL(0.075 - day * 0.02, 0.95, 0.52);
+  glowO.material.opacity = 0.1 + (1 - day) * 0.16;
+  glowM.material.color.setHSL(0.095, 0.65 + day * 0.15, 0.58 + day * 0.12);
+  glowM.material.opacity = 0.28 + (1 - day) * 0.12;
+  core.material.color.setHSL(0.11 + day * 0.02, 0.2 + day * 0.25, 0.9 - (1 - day) * 0.28);
+}
+
+// ── Realistic volumetric-looking cloud system ─────────────────────────────────
+const allCloudMats = [];   // tracked so we can update uSunDir every frame
+
+function makeCloudMaterial() {
+  const mat = new THREE.ShaderMaterial({
+    uniforms: {
+      uSunDir:  { value: new THREE.Vector3(0.35, 0.9, 0.25) },
+      uOpacity: { value: 0.92 },
+    },
+    vertexShader: /* glsl */`
+      varying vec3 vNormal;
+      varying vec3 vViewDir;
+      void main() {
+        vNormal  = normalize(normalMatrix * normal);
+        vec4 mv  = modelViewMatrix * vec4(position, 1.0);
+        vViewDir = normalize(-mv.xyz);
+        gl_Position = projectionMatrix * mv;
+      }
+    `,
+    fragmentShader: /* glsl */`
+      uniform vec3  uSunDir;
+      uniform float uOpacity;
+      varying vec3  vNormal;
+      varying vec3  vViewDir;
+
+      void main() {
+        // Fresnel: makes each puff soft and billowy at its silhouette
+        float rim   = dot(vNormal, vViewDir);
+        float alpha = smoothstep(0.04, 0.62, rim) * uOpacity;
+
+        // Vertical gradient — top lit, bottom shadowed
+        float yUp  = clamp(vNormal.y * 0.5 + 0.62, 0.0, 1.0);
+
+        // Sun diffuse
+        vec3  sunN = normalize(uSunDir);
+        float sun  = max(0.0, dot(vNormal, sunN));
+        float lit  = sun * 0.42 + 0.58;
+
+        // Back-scatter silver lining (Mie forward scatter approximation)
+        float back   = max(0.0, -dot(vNormal, sunN));
+        float rimGlow = 1.0 - clamp(dot(vNormal, vViewDir), 0.0, 1.0);
+        float scatter = back * back * rimGlow * 0.30;
+
+        vec3 brightCol = vec3(0.97, 0.97, 1.00);
+        vec3 shadowCol = vec3(0.50, 0.56, 0.68);
+        vec3 col = mix(shadowCol, brightCol, yUp * lit);
+        col += vec3(0.18, 0.14, 0.10) * scatter;  // warm silver rim
+
+        gl_FragColor = vec4(col, alpha);
+      }
+    `,
+    transparent: true,
+    depthWrite:  false,
+    side: THREE.FrontSide,
+  });
+  allCloudMats.push(mat);
+  return mat;
+}
+
+// Build a single cloud group with ~18 overlapping puffs for a cumulus shape
+function makeCloud(scale = 1.0) {
+  const g = new THREE.Group();
+  const puffs = [
+    // Core body
+    [  0.0,  0.0,  0.0, 2.2 ],
+    [  1.9, -0.3,  0.3, 1.65],
+    [ -1.8, -0.2,  0.2, 1.55],
+    [  0.5,  1.1, -0.1, 1.25],
+    [ -0.6,  1.0,  0.4, 1.05],
+    // Mid-ring
+    [  3.3, -0.5, -0.2, 1.10],
+    [ -3.1, -0.4,  0.1, 1.00],
+    [  1.3, -0.6,  1.5, 0.85],
+    [ -1.1, -0.5, -1.3, 0.80],
+    [  2.3,  0.4,  0.9, 0.90],
+    [ -2.0,  0.3, -0.8, 0.85],
+    // Outer wisps
+    [  4.4, -0.8,  0.6, 0.65],
+    [ -4.1, -0.7, -0.3, 0.60],
+    [  0.9,  1.9,  0.3, 0.50],
+    [  2.9, -0.9, -1.1, 0.55],
+    [ -2.6, -0.8,  1.2, 0.52],
+    [  0.0,  2.4,  0.0, 0.45],
+    [  1.5,  1.6, -0.8, 0.42],
+  ];
+  puffs.forEach(([px, py, pz, r]) => {
+    const geo = new THREE.SphereGeometry(r * scale, 10, 8);
+    const m   = new THREE.Mesh(geo, makeCloudMaterial());
+    m.position.set(px * scale, py * scale, pz * scale);
+    g.add(m);
+  });
+  return g;
+}
+
+// ── Background clouds (always present) ───────────────────────────────────────
+const bgClouds = [];
+
+function spawnBgCloud() {
+  const scale = 1.4 + Math.random() * 1.9;
+  const g     = makeCloud(scale);
+  const angle = Math.random() * Math.PI * 2;
+  const dist  = 28 + Math.random() * 45;
+  g.position.set(Math.cos(angle) * dist, 7 + Math.random() * 10, Math.sin(angle) * dist);
+  g.userData.drift = Math.random() * Math.PI * 2;
+  scene.add(g);
+  bgClouds.push(g);
+}
+for (let i = 0; i < 10; i++) spawnBgCloud();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Spawn animation — every placed object rises from the ground
+// ═══════════════════════════════════════════════════════════════════════════
+const spawning = [];  // { object, targetScale, startY, t }
+
+function spawnAnimate(object, targetScale) {
+  const startY = object.position.y - 4;
+  object.position.y = startY;
+  object.scale.setScalar(0.01);
+  spawning.push({ object, targetScale, startY, targetY: object.position.y + 4, t: 0 });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// LLM auto-placer — simulates brain-driven city building
+// ═══════════════════════════════════════════════════════════════════════════
+const AUTO_SCENES = {
+  fractured: [
+    { label:'industrial a',  dx: 0, dz: 0  }, { label:'chimney large', dx: 3,  dz: 2  },
+    { label:'skyscraper b',  dx:-2, dz: 5  }, { label:'industrial c',  dx: 6,  dz:-2  },
+    { label:'chimney small', dx:-4, dz: 3  }, { label:'barrier',       dx: 1,  dz:-4  },
+    { label:'industrial g',  dx: 8, dz: 3  }, { label:'tank',          dx:-5, dz:-3  },
+  ],
+  electric: [
+    { label:'skyscraper a',  dx: 0, dz: 0  }, { label:'skyscraper c',  dx: 5,  dz: 1  },
+    { label:'building a',    dx:-4, dz: 2  }, { label:'road',          dx: 2,  dz:-4  },
+    { label:'light double',  dx: 0, dz:-4  }, { label:'skyscraper e',  dx: 8,  dz:-2  },
+    { label:'building d',    dx:-7, dz:-1  }, { label:'light cross',   dx: 5,  dz: 5  },
+  ],
+  serene: [
+    { label:'suburban a',    dx: 0, dz: 0  }, { label:'park',          dx: 6,  dz: 0  },
+    { label:'tree',          dx: 4, dz: 4  }, { label:'suburban b',    dx:-4,  dz: 2  },
+    { label:'pond',          dx: 2, dz:-5  }, { label:'tree',          dx:-2,  dz:-4  },
+    { label:'suburban c',    dx: 8, dz: 3  }, { label:'planter',       dx:-6,  dz: 4  },
+  ],
+  hollow: [
+    { label:'building c',    dx: 0, dz: 0  }, { label:'building d',    dx:-5,  dz: 1  },
+    { label:'road',          dx: 3, dz:-3  }, { label:'low building',  dx:-2,  dz:-4  },
+    { label:'industrial b',  dx: 4, dz: 4  }, { label:'building e',    dx: 7,  dz: 0  },
+    { label:'cone',          dx:-1, dz: 3  }, { label:'barrier',       dx: 2,  dz: 6  },
+  ],
+  liminal: [
+    { label:'skyscraper a',  dx: 0, dz: 0  }, { label:'road',          dx: 4,  dz: 0  },
+    { label:'building a',    dx: 4, dz:-4  }, { label:'building b',    dx: 0,  dz:-4  },
+    { label:'road bend',     dx: 8, dz: 0  }, { label:'building c',    dx: 8,  dz:-4  },
+    { label:'light',         dx: 2, dz: 2  }, { label:'light',         dx: 6,  dz: 2  },
+  ],
+};
+
+function getMoodKey() {
+  const { arousal, valence } = emotion;
+  if (arousal > 0.62 && valence < 0.38) return 'fractured';
+  if (arousal > 0.62 && valence > 0.62) return 'electric';
+  if (arousal < 0.38 && valence > 0.62) return 'serene';
+  if (arousal < 0.38 && valence < 0.38) return 'hollow';
+  return 'liminal';
+}
+
+let simulating = false;
+async function simulateLLM() {
+  if (simulating) return;
+  simulating = true;
+
+  const moodKey  = getMoodKey();
+  const defs     = AUTO_SCENES[moodKey];
+  const cx = (Math.random() - 0.5) * 30;
+  const cz = (Math.random() - 0.5) * 30;
+  const colorHints = {
+    fractured:['dark rust', 'dark', ''],
+    electric: ['neon', 'blue', 'gold'],
+    serene:   ['', 'green', ''],
+    hollow:   ['dark', '', 'dark grey'],
+    liminal:  ['', '', 'white'],
+  }[moodKey];
+
+  showNarration(`constructing ${moodKey} quarter…`);
+  const simBtn = document.getElementById('simulate-btn');
+  if (simBtn) simBtn.textContent = '⏳ building…';
+
+  for (let i = 0; i < defs.length; i++) {
+    await new Promise(r => setTimeout(r, 420 + Math.random() * 200));
+    const def    = defs[i];
+    const hint   = colorHints[i % colorHints.length];
+    const rawLabel = hint ? `${hint} ${def.label}` : def.label;
+    const pos    = new THREE.Vector3(cx + def.dx, 0, cz + def.dz);
+    placeObject(rawLabel, pos);
+  }
+
+  if (simBtn) simBtn.textContent = 'simulate ✦';
+  setTimeout(() => { simulating = false; }, 800);
+}
+
+// Simulate button + spacebar (button optional — HTML may omit it)
+document.getElementById('simulate-btn')?.addEventListener('click', simulateLLM);
+window.addEventListener('keydown', e => {
+  if (e.code === 'Space' && !popupOpen) { e.preventDefault(); simulateLLM(); }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// World panel controls
+// ═══════════════════════════════════════════════════════════════════════════
+function syncUserSkyFromInputs() {
+  const zn = document.getElementById('sky-zenith');
+  const hz = document.getElementById('sky-horizon');
+  const tb = document.getElementById('sky-tint-blend');
+  if (zn) userSkyZenith.set(zn.value);
+  if (hz) userSkyHorizon.set(hz.value);
+  if (tb) {
+    skyTintBlend = parseFloat(tb.value);
+    const v = document.getElementById('v-sky-tint');
+    if (v) v.textContent = skyTintBlend.toFixed(2);
+  }
+}
+
+const worldBtn   = document.getElementById('world-btn');
+const worldPanel = document.getElementById('world-panel');
+function setWorldPanelOpen(open) {
+  if (!worldPanel || !worldBtn) return;
+  worldPanel.classList.toggle('open', open);
+  worldBtn.classList.toggle('open', open);
+  worldBtn.textContent = open ? 'world ×' : 'world';
+}
+worldBtn.addEventListener('click', () => {
+  setWorldPanelOpen(!worldPanel.classList.contains('open'));
+});
+window.addEventListener('dream-blink-up', () => {
+  const c = document.getElementById('blink-open-build');
+  if (c && !c.checked) return;
+  if (popupOpen) return;
+  clearPlacedSelection();
+  mouseNDC.set(0, 0);
+  raycaster.setFromCamera(mouseNDC, camera);
+  const ghits = raycaster.intersectObject(ground, false);
+  if (ghits.length === 0) return;
+  pendingPos = ghits[0].point.clone();
+  openPopup(window.innerWidth * 0.5, window.innerHeight * 0.36);
+});
+
+document.getElementById('sun-elevation')?.addEventListener('input', function () {
+  skyParams.elevation = parseFloat(this.value);
+  applySkyParams();
+});
+document.getElementById('sky-azimuth')?.addEventListener('input', function () {
+  skyParams.azimuth = parseFloat(this.value);
+  applySkyParams();
+});
+document.getElementById('sky-turbidity')?.addEventListener('input', function () {
+  skyParams.turbidity = parseFloat(this.value);
+  applySkyParams();
+});
+
+document.querySelectorAll('[data-sky-preset]').forEach(el => {
+  el.addEventListener('click', () => {
+    if (el.dataset.skyPreset) setSkyPreset(el.dataset.skyPreset);
+    if (el.dataset.skyZenith) {
+      const inp = document.getElementById('sky-zenith');
+      if (inp) inp.value = el.dataset.skyZenith;
+    }
+    if (el.dataset.skyHorizon) {
+      const inp = document.getElementById('sky-horizon');
+      if (inp) inp.value = el.dataset.skyHorizon;
+    }
+    syncUserSkyFromInputs();
+    applyEmotion();
+  });
+});
+
+document.getElementById('sky-zenith')?.addEventListener('input', () => {
+  syncUserSkyFromInputs();
+  applyEmotion();
+});
+document.getElementById('sky-horizon')?.addEventListener('input', () => {
+  syncUserSkyFromInputs();
+  applyEmotion();
+});
+document.getElementById('sky-tint-blend')?.addEventListener('input', () => {
+  syncUserSkyFromInputs();
+  applyEmotion();
+});
+
+document.getElementById('grid-intensity')?.addEventListener('input', function () {
+  const x = parseFloat(this.value);
+  worldGridMat.uniforms.uIntensity.value = x;
+  const v = document.getElementById('v-grid');
+  if (v) v.textContent = x.toFixed(2);
+});
+
+document.getElementById('cursor-inertia')?.addEventListener('input', function () {
+  const v = document.getElementById('v-cursor-inertia');
+  if (v) v.textContent = parseFloat(this.value).toFixed(2);
+});
+document.getElementById('gamepad-nudge')?.addEventListener('input', function () {
+  const v = document.getElementById('v-gamepad');
+  if (v) v.textContent = parseFloat(this.value).toFixed(2);
+});
+
+document.getElementById('gaze-mix')?.addEventListener('input', function () {
+  const v = document.getElementById('v-gaze-mix');
+  if (v) v.textContent = parseFloat(this.value).toFixed(2);
+});
+document.getElementById('gaze-sens')?.addEventListener('input', function () {
+  const v = document.getElementById('v-gaze-sens');
+  if (v) v.textContent = parseFloat(this.value).toFixed(2);
+});
+
+(function wireEyeGazeButtons() {
+  const btnStart = document.getElementById('eye-gaze-start');
+  const btnStop  = document.getElementById('eye-gaze-stop');
+  const st       = document.getElementById('eye-gaze-status');
+
+  function setEyeGazeUi(running) {
+    if (btnStart) btnStart.disabled = running;
+    if (btnStop)  btnStop.disabled  = !running;
+  }
+
+  btnStart?.addEventListener('click', async () => {
+    if (st) st.textContent = 'Loading MediaPipe… (first run may take ~10–20s)';
+    try {
+      await startEyeGazeBridge();
+      setEyeGazeUi(true);
+      if (st) {
+        st.textContent = 'Camera on — cursor uses EYE_LOOK_* blendshapes (eye-in-socket), not head pose.';
+      }
+    } catch (err) {
+      console.warn('[eye-gaze]', err);
+      if (st) st.textContent = String(err.message || err);
+      setEyeGazeUi(false);
+    }
+  });
+
+  btnStop?.addEventListener('click', () => {
+    stopEyeGazeBridge();
+    setEyeGazeUi(false);
+    if (st) st.textContent = 'Camera off — press start webcam when you want to try again';
+  });
+
+  setEyeGazeUi(false);
+})();
+
+// Ground colour
+document.getElementById('ground-color').addEventListener('input', function () {
+  groundMat.color.set(this.value);
+  document.querySelectorAll('[data-ground]').forEach(s => s.classList.remove('active'));
+});
+document.querySelectorAll('[data-ground]').forEach(el => {
+  el.addEventListener('click', () => {
+    groundMat.color.set(el.dataset.ground);
+    document.getElementById('ground-color').value = el.dataset.ground;
+    document.querySelectorAll('[data-ground]').forEach(s => s.classList.remove('active'));
+    el.classList.add('active');
+  });
+});
+
+document.getElementById('fog-slider').addEventListener('input', () => {
+  applyEmotion();
+});
+
+// Tint reset
+document.getElementById('tint-reset').addEventListener('click', () => {
+  document.getElementById('obj-color').value = '#ffffff';
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 2D Arousal / Valence pad
+// ═══════════════════════════════════════════════════════════════════════════
+const pad    = document.getElementById('emo-pad');
+const dot    = document.getElementById('pad-dot');
+let padDragging = false;
+
+function setPadFromEmotion() {
+  const x = emotion.valence * 100;
+  const y = (1 - emotion.arousal) * 100;
+  dot.style.left = x + '%';
+  dot.style.top  = y + '%';
+  // Colour dot: warm when tense+negative, cool when calm+positive
+  const r = Math.round(80 + emotion.arousal * 80 + (1-emotion.valence) * 60);
+  const g = Math.round(80 + emotion.valence  * 40);
+  const b = Math.round(120 + emotion.valence * 80 - emotion.arousal * 40);
+  dot.style.background = `rgb(${r},${g},${b})`;
+}
+
+function readPad(clientX, clientY) {
+  const rect = pad.getBoundingClientRect();
+  const x = Math.max(0, Math.min(1, (clientX - rect.left)  / rect.width));
+  const y = Math.max(0, Math.min(1, (clientY - rect.top)   / rect.height));
+  emotion.valence = x;
+  emotion.arousal = 1 - y;   // top = high arousal
+  setPadFromEmotion();
+  applyEmotion();
+  updateMoodDisplay();
+}
+
+pad.addEventListener('mousedown', (e) => { padDragging = true; readPad(e.clientX, e.clientY); e.stopPropagation(); });
+window.addEventListener('mousemove', (e) => { if (padDragging) readPad(e.clientX, e.clientY); });
+window.addEventListener('mouseup',   ()  => { padDragging = false; });
+pad.addEventListener('touchstart', (e) => { padDragging = true; readPad(e.touches[0].clientX, e.touches[0].clientY); }, { passive: true });
+window.addEventListener('touchmove', (e) => { if (padDragging) readPad(e.touches[0].clientX, e.touches[0].clientY); }, { passive: true });
+window.addEventListener('touchend',  ()  => { padDragging = false; });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Procedural natural objects
+// ═══════════════════════════════════════════════════════════════════════════
+const waterMeshes = [];   // updated every frame
+
+const WaterShader = {
+  uniforms: {
+    tDiffuse: { value: null },
+    time:     { value: 0 },
+    color:    { value: new THREE.Color(0x3a88cc) },
+  },
+  vertexShader: `
+    uniform float time;
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      vec3 p = position;
+      p.z += sin(p.x * 4.0 + time * 1.2) * 0.04
+           + sin(p.y * 3.0 + time * 0.9) * 0.03;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+    }
+  `,
+  fragmentShader: `
+    uniform vec3  color;
+    uniform float time;
+    varying vec2  vUv;
+    void main() {
+      float w  = sin(vUv.y * 12.0 - time * 1.8) * 0.5 + 0.5;
+      float w2 = sin(vUv.x * 8.0  + time * 1.1) * 0.5 + 0.5;
+      vec3 c   = mix(color * 0.7, color * 1.15, (w + w2) * 0.5);
+      gl_FragColor = vec4(c, 0.82);
+    }
+  `,
+};
+
+function makeWaterMesh(geo) {
+  const mat = new THREE.ShaderMaterial({
+    uniforms: THREE.UniformsUtils.clone(WaterShader.uniforms),
+    vertexShader:   WaterShader.vertexShader,
+    fragmentShader: WaterShader.fragmentShader,
+    transparent: true, side: THREE.DoubleSide,
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  waterMeshes.push(mat);
+  return mesh;
+}
+
+function buildStadium(pos) {
+  const g = new THREE.Group();
+  g.userData.objectName = 'stadium';
+  const grass = new THREE.Mesh(
+    new THREE.PlaneGeometry(16, 22),
+    new THREE.MeshStandardMaterial({ color: 0x2d5a32, roughness: 0.92 })
+  );
+  grass.rotation.x = -Math.PI / 2;
+  grass.position.y = 0.012;
+  grass.receiveShadow = true;
+  g.add(grass);
+  const standMat = new THREE.MeshStandardMaterial({ color: 0x8b95aa, roughness: 0.88, metalness: 0.06 });
+  const arc = Math.PI * 1.32;
+  for (let tier = 0; tier < 3; tier++) {
+    const r = 8.2 + tier * 1.1;
+    const tube = Math.max(0.45, 0.78 - tier * 0.11);
+    const torus = new THREE.Mesh(new THREE.TorusGeometry(r, tube, 10, 36, arc), standMat);
+    torus.rotation.x = Math.PI / 2;
+    torus.rotation.y = Math.PI / 2;
+    torus.position.y = 0.35 + tier * 0.9;
+    torus.castShadow = true;
+    torus.receiveShadow = true;
+    g.add(torus);
+  }
+  const track = new THREE.Mesh(
+    new THREE.RingGeometry(9.5, 10.35, 48),
+    new THREE.MeshStandardMaterial({ color: 0xc8ccd4, roughness: 0.88 })
+  );
+  track.rotation.x = -Math.PI / 2;
+  track.position.y = 0.014;
+  track.receiveShadow = true;
+  g.add(track);
+  g.position.copy(pos);
+  return g;
+}
+
+function buildGarden(pos) {
+  const g = new THREE.Group();
+  g.userData.objectName = 'garden';
+  const lawn = new THREE.Mesh(
+    new THREE.PlaneGeometry(12, 12),
+    new THREE.MeshStandardMaterial({ color: 0x3d6b38, roughness: 0.95 })
+  );
+  lawn.rotation.x = -Math.PI / 2;
+  lawn.position.y = 0.008;
+  lawn.receiveShadow = true;
+  g.add(lawn);
+  const hedgeMat = new THREE.MeshStandardMaterial({ color: 0x245018, roughness: 0.9 });
+  [[0, 5.85, 12, 0.45], [0, -5.85, 12, 0.45], [5.85, 0, 0.45, 12], [-5.85, 0, 0.45, 12]].forEach(([x, z, w, d]) => {
+    const h = new THREE.Mesh(new THREE.BoxGeometry(w, 0.5, d), hedgeMat);
+    h.position.set(x, 0.26, z);
+    h.castShadow = true;
+    g.add(h);
+  });
+  const pathMat = new THREE.MeshStandardMaterial({ color: 0x9a9285, roughness: 0.92 });
+  const pathA = new THREE.Mesh(new THREE.PlaneGeometry(1.15, 12), pathMat);
+  pathA.rotation.x = -Math.PI / 2;
+  pathA.position.y = 0.015;
+  g.add(pathA);
+  const pathB = new THREE.Mesh(new THREE.PlaneGeometry(12, 1.15), pathMat);
+  pathB.rotation.x = -Math.PI / 2;
+  pathB.position.y = 0.016;
+  g.add(pathB);
+  for (let i = 0; i < 11; i++) {
+    const ang = (i / 11) * Math.PI * 2 + Math.random() * 0.2;
+    const rad = 1.8 + Math.random() * 3.2;
+    const trunk = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.05, 0.07, 0.48, 6),
+      new THREE.MeshStandardMaterial({ color: 0x4a3520 })
+    );
+    trunk.position.set(Math.cos(ang) * rad, 0.24, Math.sin(ang) * rad);
+    const crown = new THREE.Mesh(
+      new THREE.SphereGeometry(0.26 + Math.random() * 0.14, 8, 6),
+      new THREE.MeshStandardMaterial({ color: 0x2d6a28 })
+    );
+    crown.position.copy(trunk.position).add(new THREE.Vector3(0, 0.52, 0));
+    g.add(trunk, crown);
+    if (i % 3 === 0) {
+      const fl = new THREE.Mesh(
+        new THREE.SphereGeometry(0.07, 6, 5),
+        new THREE.MeshStandardMaterial({ color: i % 2 ? 0xff6688 : 0xffcc44 })
+      );
+      fl.position.set(trunk.position.x + 0.22, 0.05, trunk.position.z);
+      g.add(fl);
+    }
+  }
+  for (let i = 0; i < 3; i++) {
+    const bench = new THREE.Mesh(
+      new THREE.BoxGeometry(1.5, 0.14, 0.42),
+      new THREE.MeshStandardMaterial({ color: 0x5a4a3a, roughness: 0.9 })
+    );
+    bench.position.set((i - 1) * 2.8, 0.1, 4.4);
+    bench.castShadow = true;
+    g.add(bench);
+  }
+  g.position.copy(pos);
+  return g;
+}
+
+function buildPlaza(pos) {
+  const g = new THREE.Group();
+  g.userData.objectName = 'plaza';
+  const slab = new THREE.Mesh(
+    new THREE.PlaneGeometry(14, 14),
+    new THREE.MeshStandardMaterial({ color: 0x9ca0a8, roughness: 0.94, metalness: 0.04 })
+  );
+  slab.rotation.x = -Math.PI / 2;
+  slab.position.y = 0.008;
+  slab.receiveShadow = true;
+  g.add(slab);
+  const pool = new THREE.Mesh(
+    new THREE.RingGeometry(1.1, 2.8, 32),
+    new THREE.MeshStandardMaterial({ color: 0x4a90c8, roughness: 0.35, metalness: 0.1, transparent: true, opacity: 0.85 })
+  );
+  pool.rotation.x = -Math.PI / 2;
+  pool.position.y = 0.02;
+  g.add(pool);
+  const jet = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.15, 0.35, 0.5, 10),
+    new THREE.MeshStandardMaterial({ color: 0xb8c0cc, roughness: 0.4 })
+  );
+  jet.position.y = 0.28;
+  g.add(jet);
+  g.position.copy(pos);
+  return g;
+}
+
+function buildPlayground(pos) {
+  const g = new THREE.Group();
+  g.userData.objectName = 'playground';
+  const pad = new THREE.Mesh(
+    new THREE.PlaneGeometry(8, 8),
+    new THREE.MeshStandardMaterial({ color: 0xcc8866, roughness: 0.96 })
+  );
+  pad.rotation.x = -Math.PI / 2;
+  pad.position.y = 0.008;
+  pad.receiveShadow = true;
+  g.add(pad);
+  const cols = [0xff4466, 0x44aaff, 0xffdd44, 0x66ff99];
+  for (let i = 0; i < 4; i++) {
+    const pole = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.06, 0.08, 0.9, 8),
+      new THREE.MeshStandardMaterial({ color: 0x888888 })
+    );
+    const ang = (i / 4) * Math.PI * 2;
+    pole.position.set(Math.cos(ang) * 1.8, 0.45, Math.sin(ang) * 1.8);
+    const ball = new THREE.Mesh(
+      new THREE.SphereGeometry(0.35, 10, 8),
+      new THREE.MeshStandardMaterial({ color: cols[i], roughness: 0.35 })
+    );
+    ball.position.copy(pole.position).add(new THREE.Vector3(0, 0.65, 0));
+    g.add(pole, ball);
+  }
+  g.position.copy(pos);
+  return g;
+}
+
+const PROCEDURAL_MAP = {
+  river: (pos) => {
+    const g = new THREE.Group();
+    g.userData.objectName = 'river';
+    const mesh = makeWaterMesh(new THREE.PlaneGeometry(2.5, 10, 16, 32));
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.y = 0.01;
+    g.add(mesh);
+    g.position.copy(pos);
+    return g;
+  },
+  pond: (pos) => {
+    const g = new THREE.Group();
+    g.userData.objectName = 'pond';
+    const mesh = makeWaterMesh(new THREE.CircleGeometry(2.2, 48));
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.y = 0.01;
+    g.add(mesh);
+    g.position.copy(pos);
+    return g;
+  },
+  lake: (pos) => {
+    const g = new THREE.Group();
+    g.userData.objectName = 'lake';
+    const mesh = makeWaterMesh(new THREE.CircleGeometry(5, 48));
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.y = 0.01;
+    g.add(mesh);
+    g.position.copy(pos);
+    return g;
+  },
+  stadium: (pos) => buildStadium(pos),
+  arena: (pos) => buildStadium(pos),
+  'sports center': (pos) => buildStadium(pos),
+  'sports centre': (pos) => buildStadium(pos),
+  colosseum: (pos) => buildStadium(pos),
+  'football field': (pos) => buildStadium(pos),
+  garden: (pos) => buildGarden(pos),
+  'flower garden': (pos) => buildGarden(pos),
+  'community garden': (pos) => buildGarden(pos),
+  allotment: (pos) => buildGarden(pos),
+  plaza: (pos) => buildPlaza(pos),
+  courtyard: (pos) => buildPlaza(pos),
+  playground: (pos) => buildPlayground(pos),
+  park: (pos) => {
+    const g = new THREE.Group();
+    g.userData.objectName = 'park';
+    const ground = new THREE.Mesh(
+      new THREE.PlaneGeometry(7, 7),
+      new THREE.MeshStandardMaterial({ color: 0x4a7a3a, roughness: 0.95 })
+    );
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.y = 0.008;
+    g.add(ground);
+    // Scatter a few trees
+    for (let i = 0; i < 5; i++) {
+      const trunk = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.06, 0.08, 0.6, 6),
+        new THREE.MeshStandardMaterial({ color: 0x5a3a20 })
+      );
+      trunk.position.set((Math.random()-0.5)*5, 0.3, (Math.random()-0.5)*5);
+      const crown = new THREE.Mesh(
+        new THREE.SphereGeometry(0.4 + Math.random()*0.3, 8, 6),
+        new THREE.MeshStandardMaterial({ color: 0x3a6a28 })
+      );
+      crown.position.set(trunk.position.x, 0.9 + Math.random()*0.2, trunk.position.z);
+      g.add(trunk); g.add(crown);
+    }
+    g.position.copy(pos);
+    return g;
+  },
+  hill: (pos) => {
+    const g = new THREE.Group();
+    g.userData.objectName = 'hill';
+    const geo = new THREE.SphereGeometry(3, 24, 16, 0, Math.PI*2, 0, Math.PI/2);
+    const mat = new THREE.MeshStandardMaterial({ color: 0x5a7a40, roughness: 0.9 });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.castShadow = mesh.receiveShadow = true;
+    g.add(mesh);
+    g.position.copy(pos);
+    return g;
+  },
+  cloud: (pos) => {
+    const scale = 0.7 + Math.random() * 0.8;
+    const g     = makeCloud(scale);
+    g.userData.objectName = 'cloud';
+    g.position.set(pos.x, 9 + Math.random() * 6, pos.z);
+    g.userData.drift = Math.random() * Math.PI * 2;
+    return g;
+  },
+};
+
+// Main entry — routes to procedural or GLTF loader
+function placeObject(name, position, parsed = null) {
+  // parsed may be a label-parsed object or null (called internally)
+  if (!parsed) parsed = parseLabel(name);
+
+  const key    = parsed.base.trim().toLowerCase();
+  const procFn = PROCEDURAL_MAP[key];
+
+  if (procFn) {
+    const root = procFn(position);
+    root.rotation.y        = Math.random() * Math.PI * 2;
+    root.userData.objectName = name;
+    root.userData.parsed     = parsed;
+    scene.add(root);
+    placedObjects.push(root);
+    placedNames.push(name);
+    refreshObjectList();
+    getLLMMaterials(parsed, { ...emotion }).then((params) => {
+      applyMaterialParams(root, params);
+      applyUserPlaceScale(root, parsed);
+      applyEmotion();
+    });
+    return;
+  }
+  _loadModel(name, position, parsed);
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Animation loop
@@ -1085,15 +2479,42 @@ function animate() {
 
   controls.update();
 
+  updatePointerFollow(dt);
+
   grainPass.uniforms.time.value = t;
 
-  // Slow ambient pulse (slightly tied to arousal)
-  const pulse = Math.sin(t * (0.4 + emotion.arousal * 1.8)) * 0.06;
-  ambientLight.intensity = 1.2 + pulse;
+  const pulse = Math.sin(t * (0.4 + emotion.arousal * 1.8)) * 0.05;
+  ambientLight.intensity = 0.58 + emotion.arousal * 0.22 + emotion.valence * 0.14 + pulse;
 
-  // Lazy directional light drift — dream-like
-  dirLight.position.x = 18 + Math.sin(t * 0.05) * 4;
-  dirLight.position.z = 12 + Math.cos(t * 0.07) * 3;
+  // Key light stays locked to sky sun (same direction as Three.js Sky)
+  dirLight.position.copy(sunPos).multiplyScalar(60);
+
+  // Face camera — sun reads as a disc, not a streak
+  if (sunDiscGroup.visible) sunDiscGroup.quaternion.copy(camera.quaternion);
+
+  // Animate water
+  waterMeshes.forEach(mat => { mat.uniforms.time.value = t; });
+
+  // Sync sun direction to all cloud shader materials
+  const _sunN = sunPos.clone().normalize();
+  if (_sunN.lengthSq() < 0.01) _sunN.set(0.35, 0.9, 0.25);  // fallback if not yet set
+  allCloudMats.forEach(m => m.uniforms.uSunDir.value.copy(_sunN));
+
+  // Drift placed clouds
+  placedObjects.forEach(obj => {
+    if (obj.userData.objectName === 'cloud') {
+      const d = obj.userData.drift || 0;
+      obj.position.x += Math.sin(t * 0.08 + d) * 0.003;
+      obj.position.z += Math.cos(t * 0.06 + d) * 0.002;
+    }
+  });
+
+  // Drift background clouds
+  bgClouds.forEach(c => {
+    const d = c.userData.drift || 0;
+    c.position.x += Math.sin(t * 0.05 + d) * 0.005;
+    c.position.z += Math.cos(t * 0.04 + d) * 0.004;
+  });
 
   composer.render();
 }
@@ -1101,8 +2522,15 @@ function animate() {
 // ═══════════════════════════════════════════════════════════════════════════
 // Boot
 // ═══════════════════════════════════════════════════════════════════════════
+window.addEventListener('beforeunload', () => {
+  try { stopEyeGazeBridge(); } catch (_) { /* ignore */ }
+});
+
+applySkyParams();   // initialise sunPos + sky uniforms before first render
+syncUserSkyFromInputs();
 applyEmotion();
 updateMoodDisplay();
+setPadFromEmotion();
 animate();
 </script>
 </body>
