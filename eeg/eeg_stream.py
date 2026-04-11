@@ -60,7 +60,6 @@ its True result for 1 second after the last spike so callers polling at a
 low rate don't miss a blink.
 """
 
-import time
 import threading
 import collections
 
@@ -71,14 +70,14 @@ from gpype.common.constants import Constants
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 FS             = 250                    # expected sample rate (Hz)
-WINDOW_SAMPLES = int(FS * 0.1)         # 100 ms = 25 samples
+EMOTION_WINDOW = int(FS * 0.1)         # 100 ms = 25 samples  (for emotion)
+BLINK_WINDOW   = int(FS * 0.5)         # 500 ms = 125 samples (for blink)
 BUFFER_SAMPLES = FS                    # 1-second history (250 samples)
 
-# Blink spike threshold (µV peak-to-peak).
-# Blinks: 50–200 µV.  Resting EEG: 10–50 µV.
-# Raise this if you get false positives; lower it if blinks are missed.
-DEFAULT_BLINK_THRESHOLD = 75.0
-BLINK_HOLD_S            = 1.0          # how long blink flag stays True
+# Average absolute amplitude threshold (µV) for eye-closure detection.
+# Eyes-closed sustained signal typically runs well above resting EEG.
+# Raise this if you get false positives; lower it if closures are missed.
+DEFAULT_BLINK_THRESHOLD = 40.0
 
 PORT_IN = Constants.Defaults.PORT_IN
 
@@ -88,8 +87,6 @@ _buffer: "EEGBuffer | None" = None
 _emotion_model  = None
 _emotion_cfg    = None
 _emotion_device = None
-
-_last_blink: float = 0.0
 
 
 # ── Shared rolling buffer (gpype node) ───────────────────────────────────────
@@ -153,33 +150,32 @@ def load_emotion_model(model, cfg: dict) -> None:
 # ── Public decode functions ───────────────────────────────────────────────────
 def check_blink_state(threshold: float = DEFAULT_BLINK_THRESHOLD) -> bool:
     """
-    Return True if a blink spike was detected in the last ~1 second.
+    Return True if the eyes appear to be closed right now.
 
-    Takes the most recent 100 ms (25 samples) from the shared EEG buffer
-    and flags a blink if the peak-to-peak amplitude on any channel exceeds
-    `threshold` µV.  The flag stays True for BLINK_HOLD_S (1 s) after
-    the last detected spike.
+    Looks at the last 500 ms (125 samples) of EEG and computes the mean
+    absolute amplitude across all channels.  Sustained eye closure (~0.7 s)
+    produces a broad elevation of signal magnitude that reliably exceeds
+    resting EEG, making this far more robust than single-spike detection.
 
     Parameters
     ----------
     threshold : float
-        Peak-to-peak amplitude (µV) that counts as a blink.  Default: 75 µV.
+        Mean absolute amplitude (µV) that counts as eyes-closed.
+        Default: 40 µV.  Tune up to reduce false positives, down if
+        genuine closures are missed.
     """
-    global _last_blink
-
     if _buffer is None:
         raise RuntimeError(
             "No EEGBuffer has been instantiated — add one to your pipeline."
         )
 
-    window = _buffer.latest(WINDOW_SAMPLES)   # (25, C) or None
-    if window is not None:
-        # Per-channel peak-to-peak, then take the channel with the largest swing
-        ptp = float(np.ptp(window, axis=0).max())
-        if ptp > threshold:
-            _last_blink = time.monotonic()
+    window = _buffer.latest(BLINK_WINDOW)   # (125, C) or None
+    if window is None:
+        return False
 
-    return (time.monotonic() - _last_blink) < BLINK_HOLD_S
+    # Mean absolute amplitude across all samples and all channels
+    mean_abs = float(np.abs(window).mean())
+    return mean_abs > threshold
 
 
 def decode_emotion() -> "tuple[str, float] | None":
@@ -198,7 +194,7 @@ def decode_emotion() -> "tuple[str, float] | None":
     if _emotion_model is None or _buffer is None:
         return None
 
-    window = _buffer.latest(WINDOW_SAMPLES)   # (25, C) or None
+    window = _buffer.latest(EMOTION_WINDOW)   # (25, C) or None
     if window is None:
         return None
 
