@@ -261,6 +261,131 @@
     }
     @keyframes pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
 
+    /* Vision pipeline — “thinking / neural” overlay */
+    #neural-pipeline-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 250;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: rgba(248, 249, 252, 0.92);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      pointer-events: all;
+      cursor: wait;
+    }
+    #neural-pipeline-overlay.neural-on { display: flex; }
+    .neural-pipeline-card {
+      text-align: center;
+      max-width: 420px;
+      padding: 32px 40px;
+      border: 1px solid rgba(102, 136, 170, 0.35);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.85);
+      box-shadow: 0 12px 48px rgba(40, 50, 80, 0.12);
+    }
+    .neural-pipeline-title {
+      font-size: 8px;
+      letter-spacing: 0.28em;
+      text-transform: uppercase;
+      color: #8899aa;
+      margin-bottom: 20px;
+    }
+    .neural-nodes-wrap {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0;
+      margin-bottom: 22px;
+      height: 44px;
+    }
+    .neural-node {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 30% 30%, #a8c4e8, #446688);
+      animation: neuralNodePulse 1.35s ease-in-out infinite;
+      flex-shrink: 0;
+    }
+    .neural-node:nth-child(1) { animation-delay: 0s; }
+    .neural-node:nth-child(3) { animation-delay: 0.25s; }
+    .neural-node:nth-child(5) { animation-delay: 0.5s; }
+    .neural-node:nth-child(7) { animation-delay: 0.75s; }
+    .neural-node:nth-child(9) { animation-delay: 1s; }
+    .neural-axon {
+      width: 28px;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, #aac, transparent);
+      margin: 0 2px;
+      animation: neuralAxonFlow 1.8s ease-in-out infinite;
+    }
+    .neural-nodes-wrap > .neural-axon:nth-child(2) { animation-delay: 0.15s; }
+    .neural-nodes-wrap > .neural-axon:nth-child(4) { animation-delay: 0.45s; }
+    .neural-nodes-wrap > .neural-axon:nth-child(6) { animation-delay: 0.75s; }
+    .neural-nodes-wrap > .neural-axon:nth-child(8) { animation-delay: 1.05s; }
+    @keyframes neuralNodePulse {
+      0%, 100% { transform: scale(0.75); opacity: 0.35; box-shadow: 0 0 0 0 rgba(68, 102, 136, 0); }
+      50% { transform: scale(1.2); opacity: 1; box-shadow: 0 0 16px 3px rgba(102, 136, 170, 0.45); }
+    }
+    @keyframes neuralAxonFlow {
+      0%, 100% { opacity: 0.2; transform: scaleX(0.6); }
+      50% { opacity: 1; transform: scaleX(1); }
+    }
+    .neural-eeg-bars {
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      gap: 4px;
+      height: 36px;
+      margin-bottom: 20px;
+    }
+    .neural-eeg-bar {
+      width: 5px;
+      background: linear-gradient(180deg, #6688aa, #aabbdd);
+      border-radius: 2px 2px 0 0;
+      animation: neuralEegBar 0.9s ease-in-out infinite;
+    }
+    .neural-eeg-bar:nth-child(1) { animation-delay: 0s; }
+    .neural-eeg-bar:nth-child(2) { animation-delay: 0.08s; }
+    .neural-eeg-bar:nth-child(3) { animation-delay: 0.16s; }
+    .neural-eeg-bar:nth-child(4) { animation-delay: 0.24s; }
+    .neural-eeg-bar:nth-child(5) { animation-delay: 0.32s; }
+    .neural-eeg-bar:nth-child(6) { animation-delay: 0.4s; }
+    .neural-eeg-bar:nth-child(7) { animation-delay: 0.48s; }
+    .neural-eeg-bar:nth-child(8) { animation-delay: 0.56s; }
+    @keyframes neuralEegBar {
+      0%, 100% { height: 18%; opacity: 0.45; }
+      50% { height: 100%; opacity: 1; }
+    }
+    #neural-pipeline-phase {
+      font-size: 13px;
+      letter-spacing: 0.04em;
+      color: #334455;
+      line-height: 1.5;
+      min-height: 2.8em;
+      transition: opacity 0.35s ease;
+    }
+    #neural-pipeline-prompt {
+      margin-top: 14px;
+      font-size: 10px;
+      letter-spacing: 0.06em;
+      color: #99aabb;
+      font-style: italic;
+      max-width: 340px;
+      margin-left: auto;
+      margin-right: auto;
+      line-height: 1.4;
+    }
+    #neural-pipeline-hint {
+      margin-top: 18px;
+      font-size: 8px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: #aab;
+    }
+
     /* ── Narration ─────────────────────────────────────────────────────── */
     #narration-text {
       position: fixed; bottom: 160px; left: 50%; transform: translateX(-50%);
@@ -541,6 +666,29 @@
 </div>
 
 <div id="loader">loading…</div>
+
+<div id="neural-pipeline-overlay" aria-live="polite" aria-busy="false" hidden>
+  <div class="neural-pipeline-card">
+    <div class="neural-pipeline-title">neural pipeline</div>
+    <div class="neural-nodes-wrap" aria-hidden="true">
+      <span class="neural-node"></span><span class="neural-axon"></span>
+      <span class="neural-node"></span><span class="neural-axon"></span>
+      <span class="neural-node"></span><span class="neural-axon"></span>
+      <span class="neural-node"></span><span class="neural-axon"></span>
+      <span class="neural-node"></span>
+    </div>
+    <div class="neural-eeg-bars" aria-hidden="true">
+      <span class="neural-eeg-bar"></span><span class="neural-eeg-bar"></span>
+      <span class="neural-eeg-bar"></span><span class="neural-eeg-bar"></span>
+      <span class="neural-eeg-bar"></span><span class="neural-eeg-bar"></span>
+      <span class="neural-eeg-bar"></span><span class="neural-eeg-bar"></span>
+    </div>
+    <div id="neural-pipeline-phase">Imagining…</div>
+    <div id="neural-pipeline-prompt"></div>
+    <div id="neural-pipeline-hint">synthesizing · encoding · cortical readout</div>
+  </div>
+</div>
+
 <p id="narration-text"></p>
 
 <div id="selection-panel">
@@ -1258,6 +1406,50 @@ function playAudio(b64) {
 // Core placement — stylise base, then apply LLM/local material params
 // ═══════════════════════════════════════════════════════════════════════════
 const loaderEl = document.getElementById('loader');
+const neuralOverlay = document.getElementById('neural-pipeline-overlay');
+const neuralPhaseEl = document.getElementById('neural-pipeline-phase');
+const neuralPromptEl = document.getElementById('neural-pipeline-prompt');
+let neuralPhaseTimer = null;
+
+const NEURAL_PHASE_MESSAGES = [
+  'Imagining from your words…',
+  'Synthesizing a visual in latent space…',
+  'Encoding frames for the perceptual model…',
+  'Collecting pooled cortical embedding…',
+  'Decoding neural class probabilities…',
+];
+
+function showNeuralPipelineUI(promptText) {
+  if (!neuralOverlay || !neuralPhaseEl) return;
+  if (neuralPromptEl) {
+    const s = (promptText || '').trim();
+    neuralPromptEl.textContent = s
+      ? `“${s.length > 100 ? `${s.slice(0, 100)}…` : s}”`
+      : '';
+  }
+  let i = 0;
+  neuralPhaseEl.textContent = NEURAL_PHASE_MESSAGES[0];
+  if (neuralPhaseTimer) clearInterval(neuralPhaseTimer);
+  neuralPhaseTimer = setInterval(() => {
+    i = (i + 1) % NEURAL_PHASE_MESSAGES.length;
+    neuralPhaseEl.textContent = NEURAL_PHASE_MESSAGES[i];
+  }, 2600);
+  neuralOverlay.classList.add('neural-on');
+  neuralOverlay.removeAttribute('hidden');
+  neuralOverlay.setAttribute('aria-busy', 'true');
+}
+
+function hideNeuralPipelineUI() {
+  if (neuralPhaseTimer) {
+    clearInterval(neuralPhaseTimer);
+    neuralPhaseTimer = null;
+  }
+  if (neuralOverlay) {
+    neuralOverlay.classList.remove('neural-on');
+    neuralOverlay.setAttribute('hidden', '');
+    neuralOverlay.setAttribute('aria-busy', 'false');
+  }
+}
 
 function prepareBaseMaterials(object) {
   // Ensure every mesh has its own cloned material and shadows enabled.
@@ -1491,7 +1683,7 @@ placeBtn.addEventListener('click', async () => {
 
   const useVision = document.getElementById('vision-place')?.checked ?? false;
   if (useVision && backendOnline) {
-    loaderEl.style.display = 'block';
+    showNeuralPipelineUI(raw);
     try {
       const ctrl = new AbortController();
       const t = setTimeout(() => ctrl.abort(), 600000);
@@ -1525,7 +1717,7 @@ placeBtn.addEventListener('click', async () => {
     } catch (e) {
       console.warn('[Vision] failed, using text parse only', e);
     } finally {
-      loaderEl.style.display = 'none';
+      hideNeuralPipelineUI();
     }
   }
 
