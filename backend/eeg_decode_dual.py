@@ -562,8 +562,8 @@ if __name__ == "__main__":
 
     _free_port(args.port)
 
-    blink_u1 = _resolve_blink_npz(args.blink_profile_u1, "blink_user1.npz")
-    blink_u2 = _resolve_blink_npz(args.blink_profile_u2, "blink_user2.npz")
+    blink_u1 = _resolve_blink_npz(args.blink_profile_u1, os.path.join("gtech", "blink_user1.npz"))
+    blink_u2 = _resolve_blink_npz(args.blink_profile_u2, os.path.join("cyton", "blink_user2.npz"))
 
     # ── Start decoder threads ──────────────────────────────────────────────────
     if args.mock:
