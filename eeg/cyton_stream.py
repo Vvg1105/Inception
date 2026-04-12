@@ -54,9 +54,9 @@ BUFFER_SAMPLES = FS * 4       # 4-second rolling buffer
 BLINK_WINDOW   = FS // 2      # 500 ms = 125 samples
 EMOTION_WINDOW = int(FS * 1.0)  # 1 s = 250 samples — EEGNet input window
 
-# Default emotion model paths (eeg/models/cyton/)
-_DEFAULT_EMOTION_WEIGHTS = os.path.join(_PROJECT_ROOT, "eeg", "models", "cyton", "eegnet_emotion.pt")
-_DEFAULT_EMOTION_CONFIG  = os.path.join(_PROJECT_ROOT, "eeg", "models", "cyton", "eegnet_config.json")
+# Default emotion model paths — mirrors gtech pattern at root of eeg/models/
+_DEFAULT_EMOTION_WEIGHTS = os.path.join(_PROJECT_ROOT, "eeg", "models", "eegnet_emotion_cyton.pt")
+_DEFAULT_EMOTION_CONFIG  = os.path.join(_PROJECT_ROOT, "eeg", "models", "eegnet_config_cyton.json")
 
 # Blink amplitude thresholds (µV) — same as eeg_stream.py
 BLINK_MIN           = 100.0
