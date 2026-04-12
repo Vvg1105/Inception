@@ -5,23 +5,21 @@ Architecture:
   OpenBCI Cyton (USB serial dongle)
     → BrainFlow BoardShim (polling thread, 40 ms drain interval)
       → CytonBuffer (thread-safe ring buffer + scipy IIR filter bank)
-        → check_blink()    — same amplitude-spike algorithm as eeg_stream.py
-        → decode_emotion() — same EEGNet inference, same model weights
+        → BlinkDetector (BLINK algorithm, eeg/blink_detector.py)
+        → _run_brainflow_emotion() — BrainFlow RESTFULNESS classifier
+              relaxed (≥ 0.8) → "happy"
+              neutral (≥ 0.4) → "sad"
+              stressed (< 0.4) → "angry"
+
+Blink calibration (run once before the demo):
+    python tools/calibrate_blink.py --headset cyton --label user2 --ch 0
+    # places Fp1/Fp2 electrode on channel 0 for best blink signal
 
 Usage:
     from eeg.cyton_stream import CytonDecoder
-    import json, torch
-    from eeg.eegnet import EEGNet
 
-    with open("eeg/models/eegnet_config.json") as f:
-        cfg = json.load(f)
-
-    model = EEGNet(...).to(device)
-    model.load_state_dict(torch.load("eeg/models/eegnet_emotion.pt", ...))
-    model.eval()
-
-    dec = CytonDecoder(serial_port="/dev/cu.usbserial-XXXX")
-    dec.setup(model, cfg)
+    dec = CytonDecoder(serial_port="/dev/cu.usbserial-XXXX",
+                       blink_profile="eeg/models/blink_user2.npz")
     dec.start()
 
     while True:
@@ -34,11 +32,20 @@ Usage:
 from __future__ import annotations
 
 import collections
+import os
+import sys
 import threading
 import time
 from typing import Any
 
 import numpy as np
+
+# Ensure project root on path so blink_detector can be imported stand-alone
+_PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if _PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, _PROJECT_ROOT)
+
+from eeg.blink_detector import BlinkDetector
 
 try:
     from scipy.signal import butter, sosfilt, sosfilt_zi
@@ -48,22 +55,24 @@ except ImportError:
 
 try:
     from brainflow.board_shim import BoardShim, BoardIds, BrainFlowInputParams
+    from brainflow.data_filter import DataFilter
+    from brainflow.ml_model import MLModel, BrainFlowModelParams, BrainFlowMetrics, BrainFlowClassifiers
     HAS_BRAINFLOW = True
 except ImportError:
     HAS_BRAINFLOW = False
-
-try:
-    import torch
-    HAS_TORCH = True
-except ImportError:
-    HAS_TORCH = False
 
 # ── Signal constants (match eeg_stream.py) ────────────────────────────────────
 FS             = 250          # Cyton default sample rate (Hz)
 N_CHANNELS     = 8            # EEG channels
 BUFFER_SAMPLES = FS * 2       # 2-second rolling buffer
-EMOTION_WINDOW = FS           # 1000 ms = 250 samples
 BLINK_WINDOW   = FS // 2      # 500 ms = 125 samples
+
+# BrainFlow RESTFULNESS classifier — min recommended window is 4 s
+BF_EMOTION_SAMPLES  = FS * 4  # 1000 samples @ 250 Hz
+# Relaxation score thresholds → emotion label
+BF_RELAX_HAPPY      = 0.8     # score ≥ 0.8 → happy / relaxed
+BF_RELAX_SAD        = 0.4     # score 0.4–0.8 → sad / neutral
+                               # score < 0.4 → angry / stressed
 
 # Blink amplitude thresholds (µV) — same as eeg_stream.py
 BLINK_MIN           = 100.0
@@ -78,8 +87,9 @@ EMOTION_HISTORY_N  = 6
 
 # Emotion label → (arousal, valence) circumplex mapping
 EMOTION_AV = {
-    "happy": (0.70, 0.85),
-    "sad":   (0.25, 0.20),
+    "happy": (0.70, 0.85),   # relaxed / positive
+    "sad":   (0.25, 0.20),   # low-arousal negative
+    "angry": (0.75, 0.15),   # high-arousal negative / stressed
 }
 
 
@@ -168,38 +178,23 @@ class CytonDecoder:
         self._eeg_channels: list[int] = []
 
         self._buf = CytonBuffer()
-        self._model = None
-        self._cfg: dict = {}
-        self._device = None
 
         self._running = False
         self._poll_thread: "threading.Thread | None" = None
 
+        # BrainFlow RESTFULNESS classifier (prepared in start(), released in stop())
+        self._bf_model: "MLModel | None" = None
+
         # Emotion smoothing state
-        self._prob_history: collections.deque = collections.deque(maxlen=EMOTION_HISTORY_N)
+        self._score_history: collections.deque = collections.deque(maxlen=EMOTION_HISTORY_N)
         self._next_emotion_t = 0.0
         self._last_arousal = 0.5
         self._last_valence = 0.5
         self._last_focus   = 0.5
         self._last_label   = ""
 
-    def setup(self, model: Any, cfg: dict) -> None:
-        """
-        Register the pre-loaded EEGNet emotion model.
-        Same weights file as GTECH user — both headsets use identical 8ch 250Hz EEGNet.
-
-        Parameters
-        ----------
-        model : EEGNet (torch.nn.Module), already on device, in eval() mode
-        cfg   : dict from eegnet_config.json
-        """
-        self._model = model
-        self._cfg = cfg
-        if HAS_TORCH:
-            self._device = next(model.parameters()).device
-
     def start(self) -> None:
-        """Open BrainFlow session and start background polling thread."""
+        """Open BrainFlow session, prepare ML classifier, start polling thread."""
         BoardShim.disable_board_logger()   # suppress noisy BrainFlow logs
 
         params = BrainFlowInputParams()
@@ -211,6 +206,14 @@ class CytonDecoder:
         self._board.start_stream()
         self._eeg_channels = BoardShim.get_eeg_channels(BoardIds.CYTON_BOARD.value)
 
+        # Prepare the BrainFlow RESTFULNESS emotion classifier once for the session
+        bf_params = BrainFlowModelParams(
+            BrainFlowMetrics.RESTFULNESS.value,
+            BrainFlowClassifiers.DEFAULT_CLASSIFIER.value,
+        )
+        self._bf_model = MLModel(bf_params)
+        self._bf_model.prepare()
+
         self._running = True
         self._poll_thread = threading.Thread(
             target=self._poll_loop, daemon=True, name="cyton-poll"
@@ -219,8 +222,14 @@ class CytonDecoder:
         print(f"  Cyton streaming on {self._serial_port or '(auto)'} @ {FS} Hz")
 
     def stop(self) -> None:
-        """Stop streaming and release the BrainFlow session."""
+        """Stop streaming and release the BrainFlow session and ML model."""
         self._running = False
+        if self._bf_model is not None:
+            try:
+                self._bf_model.release()
+            except Exception:
+                pass
+            self._bf_model = None
         if self._board is not None:
             try:
                 self._board.stop_stream()
@@ -261,30 +270,30 @@ class CytonDecoder:
         spike_count = int((np.diff(active.astype(np.int8)) == 1).sum())
         return spike_count >= 2
 
-    # ── Emotion inference ─────────────────────────────────────────────────────
-    def _run_emotion_model(self) -> "tuple[str, float, dict] | None":
-        """Single EEGNet forward pass on the most recent 1 s of data."""
-        if self._model is None:
+    # ── Emotion inference via BrainFlow RESTFULNESS classifier ───────────────
+    def _run_brainflow_emotion(self) -> "float | None":
+        """
+        Returns a relaxation score in [0, 1] using BrainFlow's built-in
+        RESTFULNESS classifier (band-power feature vector → logistic model).
+
+        Requires at least 4 seconds of board data (BrainFlow recommendation).
+        Returns None if the board or model is not ready yet.
+        """
+        if self._board is None or self._bf_model is None:
             return None
-        window = self._buf.latest(EMOTION_WINDOW)
-        if window is None:
+        try:
+            # get_current_board_data does NOT consume the ring buffer
+            data = self._board.get_current_board_data(BF_EMOTION_SAMPLES)
+            if data.shape[1] < BF_EMOTION_SAMPLES:
+                return None
+            bands = DataFilter.get_avg_band_powers(
+                data, self._eeg_channels, FS, apply_filter=True
+            )
+            feature_vector = bands[0]
+            raw = self._bf_model.predict(feature_vector)
+            return float(np.atleast_1d(raw)[0])
+        except Exception:
             return None
-
-        mean = np.array(self._cfg["ch_mean"], dtype=np.float32)
-        std  = np.array(self._cfg["ch_std"],  dtype=np.float32)
-        win  = (window - mean) / (std + 1e-8)      # (T, C)
-
-        x = torch.from_numpy(win.T[np.newaxis, np.newaxis]).float().to(self._device)
-        with torch.no_grad():
-            logits = self._model(x)
-            probs  = torch.softmax(logits, dim=1)[0].cpu().numpy()
-
-        idx        = int(probs.argmax())
-        label      = self._cfg["emotions"][idx]
-        conf       = float(probs[idx])
-        probs_dict = {name: float(probs[i])
-                      for i, name in enumerate(self._cfg["emotions"])}
-        return label, conf, probs_dict
 
     # ── Public decode interface ───────────────────────────────────────────────
     def decode(self) -> dict[str, Any]:
@@ -296,7 +305,7 @@ class CytonDecoder:
         -------
         dict with keys:
             arousal, valence, focus : float 0..1
-            label                  : str  ("happy" | "sad" | "")
+            label                  : str  ("happy" | "sad" | "angry" | "")
             blink                  : bool
         """
         blink = self.check_blink()
@@ -304,23 +313,28 @@ class CytonDecoder:
         now = time.monotonic()
         if now >= self._next_emotion_t:
             self._next_emotion_t = now + EMOTION_INTERVAL_S
-            result = self._run_emotion_model()
-            if result is not None:
-                _label, _conf, probs = result
-                self._prob_history.append(probs)
+            score = self._run_brainflow_emotion()
+            if score is not None:
+                self._score_history.append(score)
 
-        # Smooth by averaging probability history
-        if self._prob_history:
-            emotions = list(next(iter(self._prob_history)).keys())
-            n = len(self._prob_history)
-            avg = {e: sum(p[e] for p in self._prob_history) / n for e in emotions}
-            best = max(avg, key=avg.__getitem__)
-            conf = avg[best]
-            av = EMOTION_AV.get(best, (0.5, 0.5))
-            self._last_label   = best
+        # Smooth by averaging score history, then threshold to emotion label
+        if self._score_history:
+            avg_score = sum(self._score_history) / len(self._score_history)
+
+            if avg_score >= BF_RELAX_HAPPY:
+                label = "happy"
+            elif avg_score >= BF_RELAX_SAD:
+                label = "sad"
+            else:
+                label = "angry"
+
+            # Focus = how far the score is from ambiguous (0.5 center)
+            conf = min(1.0, abs(avg_score - 0.5) * 2.0)
+            av = EMOTION_AV[label]
+            self._last_label   = label
             self._last_focus   = conf
-            self._last_arousal = av[0] * conf + 0.5 * (1 - conf)
-            self._last_valence = av[1] * conf + 0.5 * (1 - conf)
+            self._last_arousal = av[0] * conf + 0.5 * (1.0 - conf)
+            self._last_valence = av[1] * conf + 0.5 * (1.0 - conf)
 
         return {
             "arousal": self._last_arousal,

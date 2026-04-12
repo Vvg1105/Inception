@@ -231,36 +231,14 @@ def _run_live_user1(interval: float = 0.1) -> None:
 
 def _run_cyton_user2(serial_port: str, interval: float = 0.1) -> None:
     """
-    Loads the same EEGNet weights as User 1, then streams from the Cyton board.
+    Streams from the Cyton board and classifies emotion via BrainFlow's built-in
+    RESTFULNESS classifier (no external model weights required).
     """
-    import json as _json
-    import torch
-    from eeg.eegnet import EEGNet, EmotionMLP
     from eeg.cyton_stream import CytonDecoder
-
-    config_path  = os.path.join(PROJECT_ROOT, "eeg", "models", "eegnet_config.json")
-    weights_path = os.path.join(PROJECT_ROOT, "eeg", "models", "eegnet_emotion.pt")
-
-    with open(config_path) as f:
-        cfg = _json.load(f)
-
-    device = torch.device(
-        "mps"  if torch.backends.mps.is_available()  else
-        "cuda" if torch.cuda.is_available()           else "cpu"
-    )
-    model_cls = EmotionMLP if cfg.get("model", "eegnet") == "mlp" else EEGNet
-    model = model_cls(
-        n_channels=cfg["n_channels"],
-        n_timepoints=cfg["n_timepoints"],
-        n_classes=cfg["n_classes"],
-    ).to(device)
-    model.load_state_dict(torch.load(weights_path, map_location=device))
-    model.eval()
 
     port_label = serial_port or "auto-detect"
     print(f"  [ ] User 2  OpenBCI Cyton      connecting via USB ({port_label}) …", flush=True)
     dec = CytonDecoder(serial_port=serial_port)
-    dec.setup(model, cfg)
     dec.start()
     print("  [✓] User 2  OpenBCI Cyton      connected", flush=True)
     _mark_connected(2)
