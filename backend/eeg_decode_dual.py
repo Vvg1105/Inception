@@ -54,6 +54,7 @@ import os
 import sys
 import time
 import threading
+import traceback
 from typing import Any, Optional
 
 try:
@@ -272,28 +273,36 @@ def _run_cyton_user2(
 
     port_label = serial_port or "auto-detect"
     print(f"  [ ] User 2  OpenBCI Cyton      connecting via USB ({port_label}) …", flush=True)
-    dec = CytonDecoder(
-        serial_port=serial_port,
-        blink_profile=blink_profile,
-        frontal_ch=blink_ch,
-        use_blink_paper=not no_blink_paper,
-    )
-    dec.start()
+    try:
+        dec = CytonDecoder(
+            serial_port=serial_port,
+            blink_profile=blink_profile,
+            frontal_ch=blink_ch,
+            use_blink_paper=not no_blink_paper,
+        )
+        dec.start()
+    except Exception as exc:
+        print(f"  [!] User 2  OpenBCI Cyton failed to start: {exc}", flush=True)
+        traceback.print_exc()
+        return
+
     print("  [✓] User 2  OpenBCI Cyton      connected", flush=True)
     _mark_connected(2)
 
     try:
         while True:
-            state = dec.decode()
-            # Per-channel RMS amplitudes from the Cyton rolling buffer
             try:
+                state = dec.decode()
+                # Per-channel RMS amplitudes from the Cyton rolling buffer
                 win = dec._buf.latest(50)
                 if win is not None:
                     rms = np.sqrt(np.mean(np.asarray(win, dtype=np.float32)**2, axis=0))
                     state["ch_amplitudes"] = np.clip(rms[:8] / 50.0, 0.0, 1.0).tolist()
-            except Exception:
-                pass
-            _set_user(2, state)
+                _set_user(2, state)
+            except Exception as exc:
+                print(f"  [!] User 2  OpenBCI Cyton decode loop error: {exc}", flush=True)
+                traceback.print_exc()
+                time.sleep(1.0)
             time.sleep(interval)
     finally:
         dec.stop()

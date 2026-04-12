@@ -8,24 +8,7 @@ Architecture:
       → CytonBuffer (thread-safe ring buffer + scipy IIR filter bank)
         → _run_brainflow_emotion() — BrainFlow RESTFULNESS classifier
               relaxed (≥ 0.8) → "happy"
-              neutral (≥ 0.4) → "sad"
-              stressed (< 0.4) → "angry"
-
-Blink calibration (run once before the demo; raw board data, match --ch):
-    python tools/calibrate_blink.py --headset cyton --label user2 --ch 0
-
-Usage:
-    from eeg.cyton_stream import CytonDecoder
-
-    dec = CytonDecoder(serial_port="/dev/cu.usbserial-XXXX",
-                       blink_profile="eeg/models/blink_user2.npz")
-    dec.start()
-
-    while True:
-        state = dec.decode()
-        # {"arousal": 0..1, "valence": 0..1, "focus": 0..1, "label": str, "blink": bool}
-
-    dec.stop()
+              neutral / stressed (< 0.8) → "sad"
 """
 
 from __future__ import annotations
@@ -63,7 +46,7 @@ except ImportError:
 # ── Signal constants (match eeg_stream.py) ────────────────────────────────────
 FS             = 250          # Cyton default sample rate (Hz)
 N_CHANNELS     = 8            # EEG channels
-BUFFER_SAMPLES = FS * 2       # 2-second rolling buffer
+BUFFER_SAMPLES = FS * 4       # 4-second rolling buffer to satisfy BrainFlow emotion window
 BLINK_WINDOW   = FS // 2      # 500 ms = 125 samples
 
 # BrainFlow RESTFULNESS classifier — min recommended window is 4 s
@@ -198,6 +181,8 @@ class CytonDecoder:
         self._last_valence = 0.5
         self._last_focus   = 0.5
         self._last_label   = ""
+        self._emotion_debug_started = time.monotonic()
+        self._emotion_debug_warned = False
 
         self._use_blink_paper = use_blink_paper
         self._blink_det: "BlinkDetector | None" = None
@@ -217,9 +202,13 @@ class CytonDecoder:
             params.serial_port = self._serial_port
 
         self._board = BoardShim(BoardIds.CYTON_BOARD.value, params)
+        print(f"  [Cyton] opening board session on {self._serial_port or '(auto)'}", flush=True)
         self._board.prepare_session()
+        print("  [Cyton] board session prepared", flush=True)
         self._board.start_stream()
+        print("  [Cyton] board stream started", flush=True)
         self._eeg_channels = BoardShim.get_eeg_channels(BoardIds.CYTON_BOARD.value)
+        print(f"  [Cyton] eeg channels: {self._eeg_channels}", flush=True)
 
         # Prepare the BrainFlow RESTFULNESS emotion classifier once for the session
         bf_params = BrainFlowModelParams(
@@ -299,17 +288,37 @@ class CytonDecoder:
         if self._board is None or self._bf_model is None:
             return None
         try:
-            # get_current_board_data does NOT consume the ring buffer
+            # Prefer the live BrainFlow board buffer; fallback to the filtered
+            # rolling buffer if the board buffer is not yet ready.
             data = self._board.get_current_board_data(BF_EMOTION_SAMPLES)
             if data.shape[1] < BF_EMOTION_SAMPLES:
-                return None
-            bands = DataFilter.get_avg_band_powers(
-                data, self._eeg_channels, FS, apply_filter=True
-            )
+                buf = self._buf.latest(BF_EMOTION_SAMPLES)
+                if buf is None or buf.shape[0] < BF_EMOTION_SAMPLES:
+                    if not self._emotion_debug_warned and time.monotonic() - self._emotion_debug_started > 6.0:
+                        print(
+                            f"  [!] Cyton emotion waiting for {BF_EMOTION_SAMPLES} samples; "
+                            f"buffer has {0 if buf is None else buf.shape[0]}.",
+                            flush=True,
+                        )
+                        self._emotion_debug_warned = True
+                    return None
+                data = np.ascontiguousarray(buf.T.astype(np.float64))
+                channels = list(range(data.shape[0]))
+                bands = DataFilter.get_avg_band_powers(
+                    data, channels, FS, apply_filter=False
+                )
+            else:
+                data = np.ascontiguousarray(data)
+                bands = DataFilter.get_avg_band_powers(
+                    data, self._eeg_channels, FS, apply_filter=True
+                )
             feature_vector = bands[0]
             raw = self._bf_model.predict(feature_vector)
             return float(np.atleast_1d(raw)[0])
-        except Exception:
+        except Exception as exc:
+            if not self._emotion_debug_warned:
+                print(f"  [!] Cyton emotion classifier error: {exc}", flush=True)
+                self._emotion_debug_warned = True
             return None
 
     # ── Public decode interface ───────────────────────────────────────────────
@@ -322,7 +331,7 @@ class CytonDecoder:
         -------
         dict with keys:
             arousal, valence, focus : float 0..1
-            label                  : str  ("happy" | "sad" | "angry" | "")
+            label                  : str  ("happy" | "sad" | "")
             blink                  : bool
         """
         if self._blink_det is not None and self._blink_det.ready:
@@ -343,10 +352,8 @@ class CytonDecoder:
 
             if avg_score >= BF_RELAX_HAPPY:
                 label = "happy"
-            elif avg_score >= BF_RELAX_SAD:
-                label = "sad"
             else:
-                label = "angry"
+                label = "sad"
 
             # Focus = how far the score is from ambiguous (0.5 center)
             conf = min(1.0, abs(avg_score - 0.5) * 2.0)
