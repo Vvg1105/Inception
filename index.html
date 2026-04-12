@@ -2980,9 +2980,10 @@ function applyWeather(dt) {
   }
 
   // ── Rainbow arch update ────────────────────────────────────────────────────
-  const rainbowTarget = activeWeatherLabel === 'rainbow' ? 1.0 : 0.0;
-  const rainbowOpacityUniform = rainbowArch.userData.mat.uniforms.uOpacity;
-  rainbowOpacityUniform.value += (rainbowTarget - rainbowOpacityUniform.value) * t;
+  const rainbowTarget = activeWeatherLabel === 'rainbow' ? 0.88 : 0.0;
+  rainbowArch.userData.mats.forEach(mat => {
+    mat.opacity += (rainbowTarget - mat.opacity) * t;
+  });
 }
 
 function switchWeatherTo(label) {
@@ -3031,52 +3032,34 @@ const sunDiscGroup = createSunDisc();
 scene.add(sunDiscGroup);
 
 // ── Rainbow arch — fades in for happy+happy neural symbiosis ──────────────────
+// Six concentric tori, one per color band (red outermost → violet innermost).
 function createRainbowArch() {
-  const mat = new THREE.ShaderMaterial({
-    uniforms: { uOpacity: { value: 0.0 } },
-    vertexShader: /* glsl */`
-      varying vec2 vUv;
-      void main() {
-        vUv = uv;
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-      }
-    `,
-    fragmentShader: /* glsl */`
-      uniform float uOpacity;
-      varying vec2  vUv;
-      vec3 hsl2rgb(float h, float s, float l) {
-        float c = (1.0 - abs(2.0 * l - 1.0)) * s;
-        float x = c * (1.0 - abs(mod(h * 6.0, 2.0) - 1.0));
-        float m = l - c * 0.5;
-        vec3  p;
-        if      (h < 1.0/6.0) p = vec3(c, x, 0.0);
-        else if (h < 2.0/6.0) p = vec3(x, c, 0.0);
-        else if (h < 3.0/6.0) p = vec3(0.0, c, x);
-        else if (h < 4.0/6.0) p = vec3(0.0, x, c);
-        else if (h < 5.0/6.0) p = vec3(x, 0.0, c);
-        else                   p = vec3(c, 0.0, x);
-        return p + m;
-      }
-      void main() {
-        // vUv.y: 0 = outer band (red), 1 = inner band (violet)
-        float hue   = vUv.y * 0.76;
-        float alpha = sin(vUv.y * 3.14159) * 0.72 * uOpacity;
-        vec3  col   = hsl2rgb(hue, 1.0, 0.58);
-        gl_FragColor = vec4(col, alpha);
-      }
-    `,
-    transparent: true,
-    depthWrite:  false,
-    side:        THREE.DoubleSide,
-    blending:    THREE.AdditiveBlending,
-  });
-  const geo   = new THREE.TorusGeometry(28, 4, 18, 120, Math.PI);
-  const mesh  = new THREE.Mesh(geo, mat);
+  const BANDS = [
+    { r: 35, color: 0xff1100 },  // red      (outermost)
+    { r: 32, color: 0xff7700 },  // orange
+    { r: 29, color: 0xffee00 },  // yellow
+    { r: 26, color: 0x00cc44 },  // green
+    { r: 23, color: 0x0066ff },  // blue
+    { r: 20, color: 0x8800ff },  // violet   (innermost)
+  ];
   const group = new THREE.Group();
   group.name  = 'rainbowArch';
-  group.add(mesh);
-  group.userData.mat = mat;
-  // Arch base sits just below ground; peak reaches y≈24 above the city
+  const mats  = [];
+  BANDS.forEach(({ r, color }) => {
+    const mat = new THREE.MeshBasicMaterial({
+      color,
+      transparent: true,
+      opacity:     0.0,
+      depthWrite:  false,
+      depthTest:   true,
+      side:        THREE.DoubleSide,
+    });
+    const geo  = new THREE.TorusGeometry(r, 1.4, 10, 120, Math.PI);
+    group.add(new THREE.Mesh(geo, mat));
+    mats.push(mat);
+  });
+  group.userData.mats = mats;
+  // Arch base just below ground; peak reaches y≈31 above the city
   group.position.set(0, -4, -85);
   return group;
 }
@@ -3772,7 +3755,12 @@ function syncEmotionFromEEG() {
   // Show / hide HUD
   if (hud) hud.classList.toggle('live', !!live);
 
-  if (!live) return;
+  if (!live) {
+    // No single-user EEG signal — return to sunny default
+    const chk = document.getElementById('eeg-drive-mood');
+    if (chk && chk.checked && activeWeatherLabel !== 'happy') switchWeatherTo('happy');
+    return;
+  }
 
   // Always update HUD numbers (even if "drives mood" is off)
   const em = g.emotion;
@@ -3844,60 +3832,27 @@ function _nucLabelColor(arousal, valence) {
   return `rgb(${r},${g},${b})`;
 }
 
-// Map symbiosis → WEATHER_STATES: happy = sunny day, sad = rain, angry = dusk+lightning, fear = night black
-// 3-tier happy/sad system: happy+happy = rainbow, happy+sad = cloudy, sad+sad = rainy.
+// Map symbiosis → weather: only happy/rainbow/cloudy/sad — never dark by default.
+// happy+happy = rainbow, happy+sad = cloudy, sad+sad = rainy, everything else = sunny.
 function _symbiosisWeather(sym) {
-  // Check individual user emotion labels for the 3-tier system
+  // No live signal → always sunny
+  const g1Live = !!(window.__dreamEEG1?.present);
+  const g2Live = !!(window.__dreamEEG2?.present);
+  if (!g1Live && !g2Live) return 'happy';
+
+  // 3-tier system based on individual emotion labels
   const l1 = String(window.__dreamEEG1?.emotion?.label || '').toLowerCase();
   const l2 = String(window.__dreamEEG2?.emotion?.label || '').toLowerCase();
   if (l1 && l2) {
-    const h1 = l1 === 'happy', h2 = l2 === 'happy';
-    const s1 = l1 === 'sad',   s2 = l2 === 'sad';
-    if (h1 && h2)               return 'rainbow';
-    if ((h1 && s2) || (s1 && h2)) return 'cloudy';
-    if (s1 && s2)               return 'sad';
+    if (l1 === 'happy' && l2 === 'happy') return 'rainbow';
+    if ((l1 === 'happy' && l2 === 'sad') || (l1 === 'sad' && l2 === 'happy')) return 'cloudy';
+    if (l1 === 'sad'   && l2 === 'sad')   return 'sad';
+    return 'happy';  // any other label combo → sunny
   }
-  const a = sym.arousal ?? 0.5;
+
+  // Labels not yet available — fall back on merged valence only
   const v = sym.valence ?? 0.5;
-  const score = sym.score ?? 0.5;
-  const sl = String(sym.label || '').toLowerCase();
-
-  // Black night — only strong misalignment or very dark merged affect
-  if (score < 0.20 || (sl === 'divergent' && v < 0.33 && a < 0.42)) {
-    return 'fear';
-  }
-
-  // Sunny / bright — default for neutral–positive merged valence
-  if (v >= 0.42 && a <= 0.70) {
-    return 'happy';
-  }
-
-  // Storm / orange dusk — high shared energy
-  if (a >= 0.68 && v >= 0.38) {
-    return 'angry';
-  }
-
-  // Rain / grey — clearly low valence, but not full night
-  if (v < 0.40) {
-    return 'sad';
-  }
-
-  // Label-specific nuance (so all four symbiosis words matter)
-  if (sl === 'drifting') {
-    return v < 0.44 ? 'sad' : (a > 0.65 ? 'angry' : 'happy');
-  }
-  if (sl === 'entangled') {
-    if (a > 0.60 && v < 0.38) return 'angry';
-    return v < 0.42 ? 'sad' : 'happy';
-  }
-  if (sl === 'resonant') {
-    return v >= 0.44 ? 'happy' : 'sad';
-  }
-
-  if (score > 0.75 && v > 0.52) return 'happy';
-  if (score > 0.75 && a > 0.68) return 'angry';
-  if (a > 0.66) return 'angry';
-  return 'happy';
+  return v >= 0.42 ? 'happy' : 'sad';
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -4040,7 +3995,12 @@ function syncDualEmotionFromEEG() {
   const active = window.__dreamActiveUser || 1;
 
   const dualLive = (g1 && g1.present) || (g2 && g2.present);
-  if (!dualLive) return;
+  if (!dualLive) {
+    // No dual EEG signal — return to sunny default
+    const chk = document.getElementById('eeg-drive-mood');
+    if (chk && chk.checked && activeWeatherLabel !== 'happy') switchWeatherTo('happy');
+    return;
+  }
 
   // ── Update user 1 card ────────────────────────────────────────────────────
   if (g1 && g1.emotion) {
