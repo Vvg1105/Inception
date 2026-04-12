@@ -1637,23 +1637,34 @@ fetch(`${BACKEND}/health`, { signal: AbortSignal.timeout(1500) })
 
 // ── ElevenLabs TTS via backend proxy ─────────────────────────────────────────
 let _dreamSpeakAudio = null;
+let _ttsSpeaking = false;
+
 async function dreamSpeak(text) {
   if (!backendOnline) return;
   try {
     if (_dreamSpeakAudio) { _dreamSpeakAudio.pause(); _dreamSpeakAudio = null; }
+    _ttsSpeaking = true;
     const res = await fetch(`${BACKEND}/api/tts`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text }),
       signal: AbortSignal.timeout(15000),
     });
-    if (!res.ok) { console.warn('[TTS]', res.status); return; }
+    if (!res.ok) { console.warn('[TTS]', res.status); _ttsSpeaking = false; return; }
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
     _dreamSpeakAudio = new Audio(url);
-    _dreamSpeakAudio.addEventListener('ended', () => URL.revokeObjectURL(url));
+    _dreamSpeakAudio.addEventListener('ended', () => {
+      URL.revokeObjectURL(url);
+      _ttsSpeaking = false;
+      console.info('[TTS] finished — mic open');
+    });
+    _dreamSpeakAudio.addEventListener('error', () => { _ttsSpeaking = false; });
     await _dreamSpeakAudio.play();
-  } catch (e) { console.warn('[TTS] dreamSpeak failed:', e); }
+  } catch (e) {
+    console.warn('[TTS] dreamSpeak failed:', e);
+    _ttsSpeaking = false;
+  }
 }
 
 async function getLLMMaterials(parsed, emo) {
@@ -2332,14 +2343,13 @@ async function runVisionPipeline(prompt, pos, parsed) {
           const msg = JSON.parse(line);
           if (msg.stage === 'image') {
             showImaginedImage(msg.image_b64, msg.mime);
-            dreamSpeak('I am getting information that you are imagining something like this.');
+            dreamSpeak('I am getting information that you are imagining something like this. Gathering neural data from you imagining this, from the tribe model, to decode element to place.');
           } else if (msg.stage === 'classified') {
             clearTimeout(t);
             parsed.base = msg.place_key;
             hideNeuralPipelineUI();
             showTribeBrainFromVision(msg);
             if (msg.narration) showNarration(msg.narration);
-            dreamSpeak('Gathering neural data from you imagining this, from the tribe model, to decode element to place.');
             placeObject(`${msg.classified_label}: ${prompt}`, pos, parsed);
             placed = true;
           } else if (msg.stage === 'error') {
@@ -4749,26 +4759,30 @@ const voice = {
 
   const rec = new SR();
   rec.continuous   = true;
-  rec.interimResults = false;
+  rec.interimResults = true;
   rec.lang         = 'en-US';
   voice.recognition = rec;
 
   rec.addEventListener('result', (e) => {
+    if (_ttsSpeaking) return;
     const last = e.results[e.results.length - 1];
-    if (!last.isFinal) return;
-    const text = last[0].transcript.trim().toLowerCase();
-    console.info('[Voice] heard:', text);
+    const text = last[0].transcript.trim();
 
     if (popupOpen) {
       objectInput.value = text;
+      if (!last.isFinal) return;
       voiceLabel.textContent = `"${text}"`;
       console.info('[Voice] popup speech input:', text);
-      setTimeout(() => placeBtn.click(), 400);
+      setTimeout(() => placeBtn.click(), 600);
       return;
     }
 
+    if (!last.isFinal) return;
+    const lc = text.toLowerCase();
+    console.info('[Voice] heard:', lc);
+
     if (!voice.awake) {
-      if (text.includes('hey dream') || text.includes('a dream') || text.includes('hey, dream')) {
+      if (lc.includes('hey dream') || lc.includes('a dream') || lc.includes('hey, dream')) {
         voice.awake = true;
         voiceHud.className = 'command visible';
         voiceLabel.textContent = 'listening…';
@@ -4781,8 +4795,8 @@ const voice = {
     const flyStartPhrases = ['fly', 'start fly', 'i want to fly', 'wanna fly', 'let me fly', 'take off', 'launch'];
     const flyStopPhrases  = ['stop fly', 'stop flying', 'land', 'come down', 'exit fly', 'end fly'];
 
-    const isFlyStopcmd = flyStopPhrases.some(p => text.includes(p));
-    const isFlyCmd     = !isFlyStopcmd && flyStartPhrases.some(p => text.includes(p));
+    const isFlyStopcmd = flyStopPhrases.some(p => lc.includes(p));
+    const isFlyCmd     = !isFlyStopcmd && flyStartPhrases.some(p => lc.includes(p));
 
     if (isFlyCmd) {
       voice.awake = false;
@@ -4805,9 +4819,9 @@ const voice = {
 
     voice.awake = false;
     voiceHud.className = 'visible';
-    voiceLabel.textContent = `placing "${text}"…`;
-    console.info('[Voice] command:', text);
-    voicePlaceObject(text);
+    voiceLabel.textContent = `placing "${lc}"…`;
+    console.info('[Voice] command:', lc);
+    voicePlaceObject(lc);
 
     setTimeout(() => {
       voiceHud.className = 'visible';
