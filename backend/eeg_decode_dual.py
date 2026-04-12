@@ -101,8 +101,10 @@ def _mark_connected(user: int) -> None:
         u1_ok = _connected[1]
         u2_ok = _connected[2]
     if u1_ok and u2_ok:
-        print("\n  ✓  both boards connected — streaming")
-        print("  Press  Enter ↵  to pass creation to the other user\n", flush=True)
+        print("\n  ✓  both boards connected — streaming  [Stage 0: IDLE]")
+        print("  Enter ↵  →  Stage 1: U1 blinks on")
+        print("  Enter ↵  →  Stage 2: U2 blinks on")
+        print("  Enter ↵  →  Stage 3: live emotion for both\n", flush=True)
         _both_connected.set()
 
 _state_lock = threading.Lock()
@@ -120,6 +122,43 @@ _state: dict[str, Any] = {
     "active_user": 1,
 }
 
+# ── Demo stage state ──────────────────────────────────────────────────────────
+# Stage 0: IDLE     — blinks off,     emotion: '--' for both
+# Stage 1: U1 BLINK — U1 blinks live, emotion: '--' for both
+# Stage 2: U2 BLINK — U2 blinks live, emotion: '--' for both
+# Stage 3: EMOTION  — blinks off,     emotion: live for both
+# Advance with each Enter press; caps at stage 3.
+# ─────────────────────────────────────────────────────────────────────────────
+_mode = 0
+_mode_lock = threading.Lock()
+
+_STAGE_NAMES = ["IDLE", "U1-BLINK", "U2-BLINK", "EMOTION"]
+_STAGE_DESC  = [
+    "blinks: off   │  emotion: --",
+    "blinks: U1    │  emotion: --",
+    "blinks: U2    │  emotion: --",
+    "blinks: off   │  emotion: live",
+]
+
+
+def _get_mode() -> int:
+    with _mode_lock:
+        return _mode
+
+
+def _advance_mode() -> int:
+    global _mode
+    with _mode_lock:
+        _mode = min(_mode + 1, 3)
+        new_mode = _mode
+    # Keep active_user in sync so capture logic stays correct
+    with _state_lock:
+        if new_mode == 1:
+            _state["active_user"] = 1
+        elif new_mode == 2:
+            _state["active_user"] = 2
+    return new_mode
+
 
 def _snapshot() -> dict[str, Any]:
     with _state_lock:
@@ -134,12 +173,6 @@ def _set_user(user: int, data: dict[str, Any]) -> None:
     with _state_lock:
         _state[f"user{user}"].update(data)
         _state[f"user{user}"]["present"] = True
-
-
-def _toggle_active() -> int:
-    with _state_lock:
-        _state["active_user"] = 2 if _state["active_user"] == 1 else 1
-        return _state["active_user"]
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -322,10 +355,12 @@ def _stdin_thread() -> None:
             input()
         except (EOFError, KeyboardInterrupt):
             break
-        new = _toggle_active()
-        other = 2 if new == 1 else 1
-        print(f"\n  ↳  creation passed to  USER {new}  (USER {other} now watching)\n",
-              flush=True)
+        new_mode = _advance_mode()
+        print(
+            f"\n  ↳  Stage {new_mode}: {_STAGE_NAMES[new_mode]}"
+            f"  ({_STAGE_DESC[new_mode]})\n",
+            flush=True,
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -389,12 +424,42 @@ def _build_msg(
 ) -> tuple[str, bool, bool]:
     s1, s2 = snap["user1"], snap["user2"]
     active = snap["active_user"]
-    b1, b2 = bool(s1.get("blink")), bool(s2.get("blink"))
+    mode = _get_mode()
+
+    # Stage-gated blinks: only pass through for the active stage's user
+    b1 = bool(s1.get("blink")) if mode == 1 else False
+    b2 = bool(s2.get("blink")) if mode == 2 else False
+
+    # Stage-gated emotion: only live values in stage 3, else neutral '--'
+    if mode == 3:
+        e1 = {
+            "arousal": round(s1["arousal"], 4),
+            "valence": round(s1["valence"], 4),
+            "focus":   round(s1["focus"],   4),
+            "label":   s1.get("label", ""),
+        }
+        e2 = {
+            "arousal": round(s2["arousal"], 4),
+            "valence": round(s2["valence"], 4),
+            "focus":   round(s2["focus"],   4),
+            "label":   s2.get("label", ""),
+        }
+        sym_s1 = {"arousal": s1["arousal"], "valence": s1["valence"],
+                  "label": s1.get("label", "")}
+        sym_s2 = {"arousal": s2["arousal"], "valence": s2["valence"],
+                  "label": s2.get("label", "")}
+    else:
+        e1 = {"arousal": 0.5, "valence": 0.5, "focus": 0.5, "label": "--"}
+        e2 = {"arousal": 0.5, "valence": 0.5, "focus": 0.5, "label": "--"}
+        sym_s1 = {"arousal": 0.5, "valence": 0.5, "label": "--"}
+        sym_s2 = {"arousal": 0.5, "valence": 0.5, "label": "--"}
+
     capture = (
         (active == 1 and not prev_b1 and b1) or
         (active == 2 and not prev_b2 and b2)
     )
-    sym = _symbiosis(s1, s2)
+    sym = _symbiosis(sym_s1, sym_s2)
+
     def _round_amps(amps: list) -> list:
         return [round(float(a), 3) for a in (amps or [])]
 
@@ -402,23 +467,13 @@ def _build_msg(
         "user1": {
             "present": s1["present"],
             "blink":   b1,
-            "emotion": {
-                "arousal": round(s1["arousal"], 4),
-                "valence": round(s1["valence"], 4),
-                "focus":   round(s1["focus"],   4),
-                "label":   s1.get("label", ""),
-            },
+            "emotion": e1,
             "ch_amplitudes": _round_amps(s1.get("ch_amplitudes", [])),
         },
         "user2": {
             "present": s2["present"],
             "blink":   b2,
-            "emotion": {
-                "arousal": round(s2["arousal"], 4),
-                "valence": round(s2["valence"], 4),
-                "focus":   round(s2["focus"],   4),
-                "label":   s2.get("label", ""),
-            },
+            "emotion": e2,
             "ch_amplitudes": _round_amps(s2.get("ch_amplitudes", [])),
         },
         "active_user": active,
@@ -446,17 +501,18 @@ async def _broadcast_loop() -> None:
 
         # Terminal status line
         s1, s2 = snap["user1"], snap["user2"]
-        sym    = _symbiosis(s1, s2)
-        active = snap["active_user"]
-        b1s = "◉" if s1["blink"] else "○"
-        b2s = "◉" if s2["blink"] else "○"
-        l1  = s1.get("label", "") or "—"
-        l2  = s2.get("label", "") or "—"
-        creating = f"USER {active} creating"
+        mode   = _get_mode()
+        stage  = _STAGE_NAMES[mode]
+        # Show filtered blink/emotion values (what's actually being sent)
+        b1_live = bool(s1["blink"]) if mode == 1 else False
+        b2_live = bool(s2["blink"]) if mode == 2 else False
+        b1s = "◉" if b1_live else "○"
+        b2s = "◉" if b2_live else "○"
+        l1  = (s1.get("label", "") or "—") if mode == 3 else "--"
+        l2  = (s2.get("label", "") or "—") if mode == 3 else "--"
         print(
-            f"\r  {creating:16s}  │  U1: {l1:5s} {b1s}"
-            f"  │  U2: {l2:5s} {b2s}"
-            f"  │  {sym['label']}",
+            f"\r  {stage:10s}  │  U1: {l1:5s} {b1s}"
+            f"  │  U2: {l2:5s} {b2s}",
             end="          ", flush=True,
         )
         await asyncio.sleep(TICK_MS / 1000)
