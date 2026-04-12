@@ -2305,11 +2305,15 @@ function openPopup(cx, cy, blinkUser) {
   setTimeout(() => objectInput.focus(), 40);
 
   const name = _USER_NAMES[blinkUser];
-  if (name) {
-    dreamSpeak(`Hey ${name}, we detected that you are imagining something, what are you imagining today?`);
-  } else {
-    dreamSpeak('What are we imagining today?');
-  }
+  const _speakDelay = name ? 2000 : 0;
+  setTimeout(() => {
+    if (!popupOpen) return;
+    if (name) {
+      dreamSpeak(`Hey ${name}, we detected that you are imagining something, what are you imagining today?`);
+    } else {
+      dreamSpeak('What are we imagining today?');
+    }
+  }, _speakDelay);
   if (voiceLabel) voiceLabel.textContent = 'listening for your imagination…';
 }
 
@@ -2387,7 +2391,7 @@ async function runVisionPipeline(prompt, pos, parsed) {
           const msg = JSON.parse(line);
           if (msg.stage === 'image') {
             showImaginedImage(msg.image_b64, msg.mime);
-            dreamSpeak('I am getting information that you are imagining something like this. Gathering neural data from you imagining this, from the tribe model, to decode element to place.');
+            dreamSpeak('I am getting information that you are imagining something like this. Simulating FMRI signals from the TRIBE model');
           } else if (msg.stage === 'classified') {
             clearTimeout(t);
             parsed.base = msg.place_key;
@@ -3370,17 +3374,21 @@ worldBtn.addEventListener('click', () => {
   setWorldPanelOpen(!worldPanel.classList.contains('open'));
 });
 let lastDreamBlinkOpenAt = 0;
+const _blinkUsedByUser = {};
+
 window.addEventListener('dream-blink-up', (e) => {
   if (flythrough.active) return;
   const c = document.getElementById('blink-open-build');
   if (c && !c.value) return;
   if (popupOpen) return;
 
-  // In dual mode: only open creation menu for the user who has permission.
-  // Single-user mode (no dual bridge active): e.detail.user is undefined → always open.
   const eventUser  = e.detail && e.detail.user;
   const activeUser = window.__dreamActiveUser;
   if (eventUser && activeUser && eventUser !== activeUser) return;
+
+  const uid = eventUser || activeUser || 1;
+  if (_blinkUsedByUser[uid]) return;
+  _blinkUsedByUser[uid] = true;
 
   const now = Date.now();
   if (now - lastDreamBlinkOpenAt < 280) return;
