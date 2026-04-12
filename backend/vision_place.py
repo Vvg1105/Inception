@@ -92,13 +92,13 @@ def generate_bfl_image(
 
 def _fast_image_to_mp4(
     image_path: Path, out_mp4: Path, ffmpeg_exe: str,
-    duration_sec: float = 1.0, fps: int = 4,
+    duration_sec: float = 2.0, fps: int = 8, res: int = 512,
 ) -> None:
     """Ultrafast MP4 for real-time classification (not training)."""
     import subprocess
 
     out_mp4.parent.mkdir(parents=True, exist_ok=True)
-    vf = f"fps={fps},format=yuv420p,scale=trunc(iw/2)*2:trunc(ih/2)*2"
+    vf = f"scale={res}:{res}:force_original_aspect_ratio=decrease,pad={res}:{res}:(ow-iw)/2:(oh-ih)/2,fps={fps},format=yuv420p"
     cmd = [
         ffmpeg_exe, "-hide_banner", "-loglevel", "error", "-y",
         "-loop", "1", "-i", str(image_path),
@@ -116,9 +116,9 @@ def classify_from_image_bytes(
     *,
     img_bytes: bytes,
     mime: str,
-    duration_sec: float = 5.0,
-    fps: int = 24,
-    fast: bool = False,
+    duration_sec: float = 2.0,
+    fps: int = 8,
+    fast: bool = True,
     cache_folder: str | None = None,
 ) -> tuple[str, str, float, dict[str, float], np.ndarray]:
     """Step 2: image bytes → looped MP4 → TRIBE → classifier.

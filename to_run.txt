@@ -1,0 +1,10 @@
+ 
+ Termninal 1 
+ cd ~/Desktop/cuevasbuilds/new/imagine && python3 -m http.server 8080
+
+ Terminal 2
+ssh -i ~/.ssh/id_ed25519 -L 8000:127.0.0.1:8000 -p 17926 root@103.196.86.53
+cd /workspace/Inception/backend && source /workspace/.venv/bin/activate && uvicorn app:app --host 0.0.0.0 --port 8000
+
+python backend/eeg_decode_dual.py --cyton-port /dev/cu.usbserial-DP05J1WH
+
