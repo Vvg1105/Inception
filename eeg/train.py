@@ -12,11 +12,18 @@ Split strategy
 
 Output
 ------
-  eeg/models/eegnet_emotion.pt   — model state dict (best val acc)
-  eeg/models/eegnet_config.json  — architecture / normalisation params
+  With --gtec  : eeg/models/eegnet_emotion_gtec.pt,  eegnet_config_gtec.json
+  With --cyton : eeg/models/eegnet_emotion_cyton.pt, eegnet_config_cyton.json
 
-Run with conda base (has torch + sklearn + numpy):
-  conda run -n base python eeg/train.py
+Binary vs multi-class
+----------------------
+  Set TRAIN_EMOTIONS in this file to a list of two names from eeg/eegnet.py EMOTIONS
+  (e.g. ["sad", "happy"]) to train a 2-way classifier; samples with other labels are
+  dropped.  Use TRAIN_EMOTIONS = None for all classes in EMOTIONS.
+
+Run (pick one board; data must live under eeg/data/<board>/ from collect_data.py):
+  python eeg/train.py --cyton
+  python eeg/train.py --gtec
 """
 import os
 import sys
@@ -376,7 +383,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     board = "gtec" if args.gtec else "cyton"
-    # train.py lives in eeg/ — override the module-level paths before calling train()
+    # Rebind module-level paths before train() (same names as lines 36–39).
     DATA_DIR = os.path.join(os.path.dirname(__file__), "data", board)
     WEIGHTS  = os.path.join(MODEL_DIR, f"eegnet_emotion_{board}.pt")
     CFG_PATH = os.path.join(MODEL_DIR, f"eegnet_config_{board}.json")

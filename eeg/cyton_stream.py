@@ -6,9 +6,8 @@ Architecture:
     → BrainFlow BoardShim (polling thread, 40 ms drain interval)
       → raw EEG fed to BlinkDetector (BLINK algorithm, eeg/blink_detector.py)
       → CytonBuffer (thread-safe ring buffer + scipy IIR filter bank)
-        → _run_brainflow_emotion() — BrainFlow RESTFULNESS classifier
-              relaxed (≥ 0.8) → "happy"
-              neutral / stressed (< 0.8) → "sad"
+        → _run_brainflow_emotion() — BrainFlow RESTFULNESS score in [0, 1]
+              higher score → label "happy", lower → "sad" (UI matches g.tec / EEGNet)
 """
 
 from __future__ import annotations
@@ -51,10 +50,6 @@ BLINK_WINDOW   = FS // 2      # 500 ms = 125 samples
 
 # BrainFlow RESTFULNESS classifier — min recommended window is 4 s
 BF_EMOTION_SAMPLES  = FS * 4  # 1000 samples @ 250 Hz
-# Relaxation score thresholds → emotion label
-BF_RELAX_HAPPY      = 0.8     # score ≥ 0.8 → happy / relaxed
-BF_RELAX_SAD        = 0.4     # score 0.4–0.8 → sad / neutral
-                               # score < 0.4 → angry / stressed
 
 # Blink amplitude thresholds (µV) — same as eeg_stream.py
 BLINK_MIN           = 100.0
@@ -63,18 +58,14 @@ BLINK2_BASELINE_MAX = 50.0
 BLINK2_SPIKE_MIN    = 100.0
 BLINK2_SPIKE_MAX    = 200.0
 
-# Center band for neutral / ambiguous RESTFULNESS scores
-BF_RELAX_NEUTRAL_DELTA = 0.10
-
 # Emotion smoothing history window
 EMOTION_INTERVAL_S = 0.5
 EMOTION_HISTORY_N  = 6
 
-# Emotion label → (arousal, valence) circumplex mapping
+# Emotion label → (arousal, valence) circumplex mapping (binary UI labels)
 EMOTION_AV = {
-    "relaxed":     (0.70, 0.85),   # relaxed / positive
-    "not relaxed":(0.25, 0.20),   # low-arousal negative / stressed
-    "neutral":     (0.50, 0.50),   # ambiguous/center
+    "happy": (0.70, 0.85),
+    "sad":   (0.25, 0.20),
 }
 
 
@@ -334,7 +325,7 @@ class CytonDecoder:
         -------
         dict with keys:
             arousal, valence, focus : float 0..1
-            label                  : str  ("happy" | "sad" | "")
+            label                  : str  ("happy" | "sad")
             blink                  : bool
         """
         if self._blink_det is not None and self._blink_det.ready:
@@ -349,16 +340,10 @@ class CytonDecoder:
             if score is not None:
                 self._score_history.append(score)
 
-        # Smooth by averaging score history, then threshold to emotion label
+        # Smooth RESTFULNESS score → binary happy/sad (same vocabulary as g.tec / EEGNet)
         if self._score_history:
             avg_score = sum(self._score_history) / len(self._score_history)
-
-            if abs(avg_score - 0.5) <= BF_RELAX_NEUTRAL_DELTA:
-                label = "neutral"
-            elif avg_score > 0.5:
-                label = "relaxed"
-            else:
-                label = "not relaxed"
+            label = "happy" if avg_score >= 0.5 else "sad"
 
             # Focus = how far the score is from ambiguous (0.5 center)
             conf = min(1.0, abs(avg_score - 0.5) * 2.0)
