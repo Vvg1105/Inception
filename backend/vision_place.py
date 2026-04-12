@@ -116,8 +116,8 @@ def classify_from_image_bytes(
     *,
     img_bytes: bytes,
     mime: str,
-    duration_sec: float = 2.0,
-    fps: int = 8,
+    duration_sec: float = 3.0,
+    fps: int = 16,
     fast: bool = True,
     cache_folder: str | None = None,
 ) -> tuple[str, str, float, dict[str, float], np.ndarray]:
