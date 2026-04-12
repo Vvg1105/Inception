@@ -1,17 +1,18 @@
 """
 EEGNet training on collected emotion data.
 
-Loads eeg/data/eeg_raw.npy + eeg/data/eeg_labels.npy,
-creates overlapping 100 ms windows, trains EEGNet, saves weights.
+Loads all run_NNN_raw/labels.npy files from eeg/data/.
 
-Uses temporal k-fold cross-validation: each class's recording is split into
-K equal time blocks, and each fold holds out one block for validation while
-training on the rest. This avoids the start-of-session vs end-of-session
-distribution mismatch that occurs with a single fixed train/val boundary.
+Split strategy
+--------------
+  • 2+ runs  →  earlier runs = train, last run = val.
+                No window ever spans a run boundary, so there is zero leakage.
+  • 1 run    →  80/20 temporal split within that run (per class), with a
+                stride-wide gap at the boundary to prevent shared samples.
 
 Output
 ------
-  eeg/models/eegnet_emotion.pt   — model state dict (best fold)
+  eeg/models/eegnet_emotion.pt   — model state dict (best val acc)
   eeg/models/eegnet_config.json  — architecture / normalisation params
 
 Run with conda base (has torch + sklearn + numpy):
@@ -34,8 +35,6 @@ from eegnet import EEGNet, EmotionMLP, EMOTIONS, FS, N_SAMPLES, N_CHANNELS
 # ── Paths ─────────────────────────────────────────────────────────────────────
 DATA_DIR   = os.path.join(os.path.dirname(__file__), "data")
 MODEL_DIR  = os.path.join(os.path.dirname(__file__), "models")
-RAW_PATH   = os.path.join(DATA_DIR,  "eeg_raw.npy")
-LABEL_PATH = os.path.join(DATA_DIR,  "eeg_labels.npy")
 WEIGHTS    = os.path.join(MODEL_DIR, "eegnet_emotion.pt")
 CFG_PATH   = os.path.join(MODEL_DIR, "eegnet_config.json")
 
@@ -150,30 +149,79 @@ def build_model(device):
 def train():
     os.makedirs(MODEL_DIR, exist_ok=True)
 
-    # ── Load raw data ─────────────────────────────────────────────────────────
-    if not os.path.exists(RAW_PATH):
-        sys.exit(f"[ERROR] {RAW_PATH} not found — run collect_data.py first.")
+    # ── Discover runs ─────────────────────────────────────────────────────────
+    import re
+    run_nums = sorted(
+        int(m.group(1))
+        for f in os.listdir(DATA_DIR)
+        if (m := re.match(r"run_(\d+)_raw\.npy$", f))
+        and os.path.exists(os.path.join(DATA_DIR, f"run_{int(m.group(1)):03d}_labels.npy"))
+    )
+    if not run_nums:
+        sys.exit("[ERROR] No run_NNN_raw.npy files found — run collect_data.py first.")
 
-    raw    = np.load(RAW_PATH)                 # (N, 8)
-    labels = np.load(LABEL_PATH)               # (N,)
-    print(f"Loaded {len(raw)} samples, {len(EMOTIONS)} classes")
-    for i, e in enumerate(EMOTIONS):
-        print(f"  {e:>8s}: {(labels==i).sum()} raw samples")
+    print(f"Found {len(run_nums)} run(s): {[f'run_{r:03d}' for r in run_nums]}")
 
-    # ── 80/20 temporal split per class ───────────────────────────────────────
+    def load_run(n):
+        raw    = np.load(os.path.join(DATA_DIR, f"run_{n:03d}_raw.npy"))
+        labels = np.load(os.path.join(DATA_DIR, f"run_{n:03d}_labels.npy"))
+        return raw, labels
+
     print(f"\nWindowing  (window={WINDOW} samples = {WINDOW/FS*1000:.0f} ms,"
           f"  stride={STRIDE} samples = {STRIDE/FS*1000:.0f} ms)")
-    print(f"  split: first {int(TRAIN_RATIO*100)}% train / last {int((1-TRAIN_RATIO)*100)}% val\n")
 
     X_tr_parts, y_tr_parts = [], []
     X_va_parts, y_va_parts = [], []
-    for cls_idx, cls_name in enumerate(EMOTIONS):
-        raw_cls = raw[labels == cls_idx]
-        Xtr, ytr, Xva, yva = split_train_val(
-            raw_cls, cls_idx, TRAIN_RATIO, WINDOW, STRIDE)
-        X_tr_parts.append(Xtr); y_tr_parts.append(ytr)
-        X_va_parts.append(Xva); y_va_parts.append(yva)
-        print(f"  {cls_name:>8s}: {len(Xtr):3d} train  |  {len(Xva):3d} val")
+
+    if len(run_nums) == 1:
+        # Single run: 80/20 temporal split per class
+        print(f"  Single run → 80/20 temporal split per class "
+              f"(first {int(TRAIN_RATIO*100)}% train / last {int((1-TRAIN_RATIO)*100)}% val)\n")
+        raw, labels = load_run(run_nums[0])
+        print(f"  run_001: {len(raw)} samples")
+        for i, e in enumerate(EMOTIONS):
+            print(f"    {e:>8s}: {(labels==i).sum()} raw samples")
+        for cls_idx, cls_name in enumerate(EMOTIONS):
+            raw_cls = raw[labels == cls_idx]
+            Xtr, ytr, Xva, yva = split_train_val(
+                raw_cls, cls_idx, TRAIN_RATIO, WINDOW, STRIDE)
+            X_tr_parts.append(Xtr); y_tr_parts.append(ytr)
+            X_va_parts.append(Xva); y_va_parts.append(yva)
+            print(f"  {cls_name:>8s}: {len(Xtr):3d} train  |  {len(Xva):3d} val")
+    else:
+        # Multiple runs: earlier runs = train, last run = val
+        train_runs = run_nums[:-1]
+        val_run    = run_nums[-1]
+        print(f"  Train runs: {[f'run_{r:03d}' for r in train_runs]}")
+        print(f"  Val   run : run_{val_run:03d}\n")
+
+        for split_label, runs, tr_parts, va_parts in [
+            ("train", train_runs, (X_tr_parts, y_tr_parts), None),
+            ("val",   [val_run],  None, (X_va_parts, y_va_parts)),
+        ]:
+            target_X = tr_parts[0] if tr_parts else va_parts[0]
+            target_y = tr_parts[1] if tr_parts else va_parts[1]
+            for run_n in runs:
+                raw, labels = load_run(run_n)
+                print(f"  run_{run_n:03d} ({split_label}): {len(raw)} samples", end="")
+                for i, e in enumerate(EMOTIONS):
+                    print(f"  {e}={int((labels==i).sum())}", end="")
+                print()
+                for cls_idx in range(len(EMOTIONS)):
+                    raw_cls = raw[labels == cls_idx]
+                    lbl_arr = np.full(len(raw_cls), cls_idx, dtype=np.int64)
+                    X, y    = make_windows(raw_cls, lbl_arr, WINDOW, STRIDE)
+                    target_X.append(X)
+                    target_y.append(y)
+
+        print(f"\n  train windows per class:")
+        for cls_idx, cls_name in enumerate(EMOTIONS):
+            n = sum((y == cls_idx).sum() for y in y_tr_parts)
+            print(f"    {cls_name:>8s}: {n}")
+        print(f"  val windows per class:")
+        for cls_idx, cls_name in enumerate(EMOTIONS):
+            n = sum((y == cls_idx).sum() for y in y_va_parts)
+            print(f"    {cls_name:>8s}: {n}")
 
     X_train = np.concatenate(X_tr_parts); y_train = np.concatenate(y_tr_parts)
     X_val   = np.concatenate(X_va_parts); y_val   = np.concatenate(y_va_parts)

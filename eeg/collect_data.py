@@ -1,13 +1,16 @@
 """
 EEG emotion data collection — BCI Core-8 / g.tec gtec headset.
 
-Records 4 emotions (angry, sad, happy, fear) for RECORD_SECS each.
-Prompts you between trials so you can compose yourself.
+Records emotions for TRIAL_SECS each, N_TRIALS per emotion.
+Each run is saved as a numbered file so multiple sessions can be combined
+during training without overwriting previous data.
 
-Output
+Output (one pair per run)
 ------
-  eeg/data/eeg_raw.npy    float32 (N, 8)  — filtered EEG samples
-  eeg/data/eeg_labels.npy int64   (N,)    — 0=angry 1=sad 2=happy 3=fear
+  eeg/data/run_001_raw.npy    float32 (N, 8)  — filtered EEG samples
+  eeg/data/run_001_labels.npy int64   (N,)    — 0=sad 1=happy ...
+  eeg/data/run_002_raw.npy    ...
+  ...
 
 Run with conda base (has gpype + numpy):
   conda run -n base python eeg/collect_data.py
@@ -26,9 +29,9 @@ from gpype.common.constants import Constants
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 EMOTIONS     = ["sad", "happy"]
-N_TRIALS     = 3       # trials per emotion — more trials = more onset events = better model
-TRIAL_SECS   = 7       # seconds per trial — short enough that emotion stays strong throughout
-REST_SECS    = 4       # rest between trials (not recorded, just a break)
+N_TRIALS     = 100       # trials per emotion — more trials = more onset events = better model
+TRIAL_SECS   = 2       # seconds per trial — short enough that emotion stays strong throughout
+REST_SECS    = 0.5       # rest between trials (not recorded, just a break)
 FS           = 250
 DATA_DIR     = os.path.join(os.path.dirname(__file__), "data")
 REST_LABEL   = len(EMOTIONS)   # sentinel label (2) used to mark trial boundaries in the array
@@ -112,6 +115,25 @@ def progress_bar(secs: int, label: str):
         print(f"  [{bar}] {remaining:.1f}s  FEEL {label.upper()}", end="\r", flush=True)
         time.sleep(0.05)
     print(" " * 70, end="\r")
+
+
+# ── Run helpers ───────────────────────────────────────────────────────────────
+def _find_runs(data_dir: str) -> list[int]:
+    """Return sorted list of run numbers that have both raw + labels files."""
+    import re
+    runs = []
+    for fname in os.listdir(data_dir):
+        m = re.match(r"run_(\d+)_raw\.npy$", fname)
+        if m:
+            n = int(m.group(1))
+            if os.path.exists(os.path.join(data_dir, f"run_{n:03d}_labels.npy")):
+                runs.append(n)
+    return sorted(runs)
+
+
+def _next_run_number(data_dir: str) -> int:
+    existing = _find_runs(data_dir)
+    return (max(existing) + 1) if existing else 1
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -201,13 +223,17 @@ def main():
         count = int((labels == i).sum())
         print(f"    {e:>8s} ({i}): {count} samples  ({count/FS:.1f}s)")
 
-    # ── Save ──────────────────────────────────────────────────────────────────
-    raw_path    = os.path.join(DATA_DIR, "eeg_raw.npy")
-    labels_path = os.path.join(DATA_DIR, "eeg_labels.npy")
+    # ── Save (numbered run) ───────────────────────────────────────────────────
+    run_num     = _next_run_number(DATA_DIR)
+    raw_path    = os.path.join(DATA_DIR, f"run_{run_num:03d}_raw.npy")
+    labels_path = os.path.join(DATA_DIR, f"run_{run_num:03d}_labels.npy")
     np.save(raw_path,    raw)
     np.save(labels_path, labels)
-    print(f"\n  Saved: {raw_path}")
-    print(f"  Saved: {labels_path}")
+    print(f"\n  Saved run {run_num:03d}: {raw_path}")
+    print(f"  Saved run {run_num:03d}: {labels_path}")
+    existing = sorted(_find_runs(DATA_DIR))
+    print(f"  Total runs on disk: {len(existing)} "
+          f"({', '.join(f'run_{r:03d}' for r in existing)})")
     print("  Collection complete.\n")
 
 

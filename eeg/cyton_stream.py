@@ -63,15 +63,18 @@ BLINK2_BASELINE_MAX = 50.0
 BLINK2_SPIKE_MIN    = 100.0
 BLINK2_SPIKE_MAX    = 200.0
 
-# Emotion-smoothing history window
+# Center band for neutral / ambiguous RESTFULNESS scores
+BF_RELAX_NEUTRAL_DELTA = 0.10
+
+# Emotion smoothing history window
 EMOTION_INTERVAL_S = 0.5
 EMOTION_HISTORY_N  = 6
 
 # Emotion label → (arousal, valence) circumplex mapping
 EMOTION_AV = {
-    "happy": (0.70, 0.85),   # relaxed / positive
-    "sad":   (0.25, 0.20),   # low-arousal negative
-    "angry": (0.75, 0.15),   # high-arousal negative / stressed
+    "relaxed":     (0.70, 0.85),   # relaxed / positive
+    "not relaxed":(0.25, 0.20),   # low-arousal negative / stressed
+    "neutral":     (0.50, 0.50),   # ambiguous/center
 }
 
 
@@ -350,10 +353,12 @@ class CytonDecoder:
         if self._score_history:
             avg_score = sum(self._score_history) / len(self._score_history)
 
-            if avg_score >= BF_RELAX_HAPPY:
-                label = "happy"
+            if abs(avg_score - 0.5) <= BF_RELAX_NEUTRAL_DELTA:
+                label = "neutral"
+            elif avg_score > 0.5:
+                label = "relaxed"
             else:
-                label = "sad"
+                label = "not relaxed"
 
             # Focus = how far the score is from ambiguous (0.5 center)
             conf = min(1.0, abs(avg_score - 0.5) * 2.0)
