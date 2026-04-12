@@ -43,6 +43,14 @@ CFG_PATH   = os.path.join(MODEL_DIR, "eegnet_config.json")
 # "eegnet" — EEGNet:     raw waveform CNN, needs more data to generalise across sessions
 MODEL = "eegnet"
 
+# ── Label selection ───────────────────────────────────────────────────────────
+# Subset of EMOTIONS to train on. Set to None to use all emotions.
+# Examples:
+#   TRAIN_EMOTIONS = ["sad", "happy"]      # binary classifier, ignores neutral data
+#   TRAIN_EMOTIONS = ["happy", "neutral"]  # binary, ignores sad data
+#   TRAIN_EMOTIONS = None                  # use all emotions (default)
+TRAIN_EMOTIONS = ["sad", "happy"]
+
 # ── Hyper-parameters ──────────────────────────────────────────────────────────
 WINDOW       = N_SAMPLES   # 250 samples = 1 s
 STRIDE       = 25          # 100 ms hop
@@ -135,13 +143,13 @@ def normalise(X_train: np.ndarray, X_val: np.ndarray):
 
 
 # ── Build model ───────────────────────────────────────────────────────────────
-def build_model(device):
+def build_model(device, n_classes):
     if MODEL == "mlp":
         m = EmotionMLP(n_channels=N_CHANNELS, n_timepoints=WINDOW,
-                       n_classes=len(EMOTIONS))
+                       n_classes=n_classes)
     else:
         m = EEGNet(n_channels=N_CHANNELS, n_timepoints=WINDOW,
-                   n_classes=len(EMOTIONS))
+                   n_classes=n_classes)
     return m.to(device)
 
 
@@ -162,9 +170,22 @@ def train():
 
     print(f"Found {len(run_nums)} run(s): {[f'run_{r:03d}' for r in run_nums]}")
 
+    # ── Resolve active emotion set ────────────────────────────────────────────
+    active_emotions = TRAIN_EMOTIONS if TRAIN_EMOTIONS is not None else EMOTIONS
+    for e in active_emotions:
+        if e not in EMOTIONS:
+            sys.exit(f"[ERROR] '{e}' not in EMOTIONS {EMOTIONS} — check TRAIN_EMOTIONS.")
+    orig_indices = [EMOTIONS.index(e) for e in active_emotions]
+    label_remap  = {orig: new for new, orig in enumerate(orig_indices)}
+    if TRAIN_EMOTIONS is not None:
+        print(f"Training on subset: {active_emotions}  (from original indices {orig_indices})")
+
     def load_run(n):
         raw    = np.load(os.path.join(DATA_DIR, f"run_{n:03d}_raw.npy"))
         labels = np.load(os.path.join(DATA_DIR, f"run_{n:03d}_labels.npy"))
+        mask   = np.isin(labels, orig_indices)
+        raw    = raw[mask]
+        labels = np.array([label_remap[l] for l in labels[mask]], dtype=np.int64)
         return raw, labels
 
     print(f"\nWindowing  (window={WINDOW} samples = {WINDOW/FS*1000:.0f} ms,"
@@ -179,9 +200,9 @@ def train():
               f"(first {int(TRAIN_RATIO*100)}% train / last {int((1-TRAIN_RATIO)*100)}% val)\n")
         raw, labels = load_run(run_nums[0])
         print(f"  run_001: {len(raw)} samples")
-        for i, e in enumerate(EMOTIONS):
+        for i, e in enumerate(active_emotions):
             print(f"    {e:>8s}: {(labels==i).sum()} raw samples")
-        for cls_idx, cls_name in enumerate(EMOTIONS):
+        for cls_idx, cls_name in enumerate(active_emotions):
             raw_cls = raw[labels == cls_idx]
             Xtr, ytr, Xva, yva = split_train_val(
                 raw_cls, cls_idx, TRAIN_RATIO, WINDOW, STRIDE)
@@ -204,10 +225,10 @@ def train():
             for run_n in runs:
                 raw, labels = load_run(run_n)
                 print(f"  run_{run_n:03d} ({split_label}): {len(raw)} samples", end="")
-                for i, e in enumerate(EMOTIONS):
+                for i, e in enumerate(active_emotions):
                     print(f"  {e}={int((labels==i).sum())}", end="")
                 print()
-                for cls_idx in range(len(EMOTIONS)):
+                for cls_idx in range(len(active_emotions)):
                     raw_cls = raw[labels == cls_idx]
                     lbl_arr = np.full(len(raw_cls), cls_idx, dtype=np.int64)
                     X, y    = make_windows(raw_cls, lbl_arr, WINDOW, STRIDE)
@@ -215,11 +236,11 @@ def train():
                     target_y.append(y)
 
         print(f"\n  train windows per class:")
-        for cls_idx, cls_name in enumerate(EMOTIONS):
+        for cls_idx, cls_name in enumerate(active_emotions):
             n = sum((y == cls_idx).sum() for y in y_tr_parts)
             print(f"    {cls_name:>8s}: {n}")
         print(f"  val windows per class:")
-        for cls_idx, cls_name in enumerate(EMOTIONS):
+        for cls_idx, cls_name in enumerate(active_emotions):
             n = sum((y == cls_idx).sum() for y in y_va_parts)
             print(f"    {cls_name:>8s}: {n}")
 
@@ -241,7 +262,7 @@ def train():
     val_loader   = DataLoader(to_tensor(X_val, y_val),
                               batch_size=BATCH, shuffle=False, drop_last=False)
 
-    model     = build_model(device)
+    model     = build_model(device, n_classes=len(active_emotions))
     total_params = sum(p.numel() for p in model.parameters())
     print(f"Model: {MODEL}  |  Parameters: {total_params:,}")
 
@@ -320,7 +341,7 @@ def train():
     with torch.no_grad():
         preds = model(X_val_t).argmax(dim=1)
     print("\nPer-class val accuracy:")
-    for i, name in enumerate(EMOTIONS):
+    for i, name in enumerate(active_emotions):
         mask    = y_val_t == i
         correct = (preds[mask] == i).sum().item()
         total   = mask.sum().item()
@@ -335,8 +356,8 @@ def train():
         "model":        MODEL,
         "n_channels":   N_CHANNELS,
         "n_timepoints": WINDOW,
-        "n_classes":    len(EMOTIONS),
-        "emotions":     EMOTIONS,
+        "n_classes":    len(active_emotions),
+        "emotions":     active_emotions,
         "fs":           FS,
         "ch_mean":      ch_mean.tolist(),
         "ch_std":       ch_std.tolist(),
@@ -347,6 +368,22 @@ def train():
 
 
 if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description="EEGNet emotion training")
+    board_group = parser.add_mutually_exclusive_group(required=True)
+    board_group.add_argument("--gtec",  action="store_true", help="Train on g.tec data (eeg/data/gtec/)")
+    board_group.add_argument("--cyton", action="store_true", help="Train on Cyton data  (eeg/data/cyton/)")
+    args = parser.parse_args()
+
+    board = "gtec" if args.gtec else "cyton"
+    # train.py lives in eeg/ — override the module-level paths before calling train()
+    DATA_DIR = os.path.join(os.path.dirname(__file__), "data", board)
+    WEIGHTS  = os.path.join(MODEL_DIR, f"eegnet_emotion_{board}.pt")
+    CFG_PATH = os.path.join(MODEL_DIR, f"eegnet_config_{board}.json")
+
+    os.makedirs(DATA_DIR, exist_ok=True)
+    print(f"Board : {board.upper()}  |  data: {DATA_DIR}")
+
     np.random.seed(42)
     torch.manual_seed(42)
     train()

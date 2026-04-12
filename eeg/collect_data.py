@@ -321,6 +321,8 @@ def main():
     )
     args = parser.parse_args()
 
+    # Save into a board-specific subdirectory so train.py --gtec/--cyton finds the right data
+    DATA_DIR = os.path.join(os.path.dirname(__file__), "data", args.board)
     os.makedirs(DATA_DIR, exist_ok=True)
 
     print("=" * 60)
