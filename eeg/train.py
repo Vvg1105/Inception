@@ -39,8 +39,8 @@ WEIGHTS    = os.path.join(MODEL_DIR, "eegnet_emotion.pt")
 CFG_PATH   = os.path.join(MODEL_DIR, "eegnet_config.json")
 
 # ── Model selection ───────────────────────────────────────────────────────────
-# "mlp"    — EmotionMLP: ~500 params, good for small datasets (< ~100 windows/class)
-# "eegnet" — EEGNet:   ~2500 params, better with larger datasets
+# "mlp"    — EmotionMLP: band-power features, more cross-session stable (recommended)
+# "eegnet" — EEGNet:     raw waveform CNN, needs more data to generalise across sessions
 MODEL = "eegnet"
 
 # ── Hyper-parameters ──────────────────────────────────────────────────────────
@@ -50,10 +50,10 @@ TRAIN_RATIO  = 0.8         # 80 % of each class's samples → train, 20 % → va
 BATCH        = 32
 EPOCHS       = 150
 LR           = 1e-3
-WEIGHT_DECAY = 1e-3        # stronger regularisation for small dataset
+WEIGHT_DECAY = 3e-3        # stronger regularisation (was 1e-3)
 PATIENCE     = 20          # early-stopping patience (per fold)
-NOISE_STD    = 0.05        # additive Gaussian noise std (fraction of signal)
-AMP_SCALE    = 0.2         # random amplitude scaling ±20 % — simulates session variability
+NOISE_STD    = 0.15        # additive Gaussian noise — simulate session variability (was 0.05)
+AMP_SCALE    = 0.4         # random amplitude scaling ±40 % (was 0.2)
 
 
 # ── Windowing ─────────────────────────────────────────────────────────────────

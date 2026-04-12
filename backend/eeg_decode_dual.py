@@ -75,8 +75,9 @@ if PROJECT_ROOT not in sys.path:
 
 # ── Emotion circumplex mapping (shared by both decoders) ──────────────────────
 EMOTION_AV = {
-    "happy": (0.70, 0.85),
-    "sad":   (0.25, 0.20),
+    "happy":   (0.70, 0.85),
+    "sad":     (0.25, 0.20),
+    "neutral": (0.50, 0.50),
 }
 
 EMOTION_INTERVAL_S = 0.5

@@ -85,6 +85,7 @@ class EEGNet(nn.Module):
 
         self.classifier = nn.Sequential(
             nn.Flatten(),
+            nn.Dropout(dropout),
             nn.Linear(flat, n_classes),
         )
 

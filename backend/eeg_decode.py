@@ -128,8 +128,9 @@ class MockDecoder(EEGDecoder):
 # Emotion label → (arousal, valence) in the circumplex model.
 # Focus is derived from confidence: high confidence → high focus.
 EMOTION_AV = {
-    "happy": (0.70, 0.85),
-    "sad":   (0.25, 0.20),
+    "happy":   (0.70, 0.85),
+    "sad":     (0.25, 0.20),
+    "neutral": (0.50, 0.50),
 }
 
 
