@@ -2255,6 +2255,7 @@ function openPopup(cx, cy) {
   if (pp) pp.style.display = 'none';
   setTimeout(() => objectInput.focus(), 40);
   dreamSpeak('What are we imagining today?');
+  if (voiceLabel) voiceLabel.textContent = 'listening for your imagination…';
 }
 
 function closePopup() {
@@ -2263,6 +2264,7 @@ function closePopup() {
   syncOrbitFromPanels();
   pendingPos          = null;
   if (typeof closePlacePreview === 'function') closePlacePreview();
+  if (voiceLabel) voiceLabel.textContent = 'say "hey dream"';
 }
 
 const TRIBE_KEYWORDS = ['bridge', 'lake', 'skyscraper', 'tree', 'house', 'building'];
@@ -4756,6 +4758,14 @@ const voice = {
     if (!last.isFinal) return;
     const text = last[0].transcript.trim().toLowerCase();
     console.info('[Voice] heard:', text);
+
+    if (popupOpen) {
+      objectInput.value = text;
+      voiceLabel.textContent = `"${text}"`;
+      console.info('[Voice] popup speech input:', text);
+      setTimeout(() => placeBtn.click(), 400);
+      return;
+    }
 
     if (!voice.awake) {
       if (text.includes('hey dream') || text.includes('a dream') || text.includes('hey, dream')) {
