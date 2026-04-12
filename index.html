@@ -2674,6 +2674,7 @@ const SKY_PRESETS = {
   night:   { turbidity: 1,  rayleigh: 0.1, mieCoeff: 0.001, mieG: 0.75, elevation:-10, azimuth: 200 },
   overcast:{ turbidity: 20, rayleigh: 4.0, mieCoeff: 0.02,  mieG: 0.70, elevation: 20, azimuth: 200 },
   dream:   { turbidity: 8,  rayleigh: 2.0, mieCoeff: 0.005, mieG: 0.82, elevation: 28, azimuth: 220 },
+  rainbow: { turbidity: 2,  rayleigh: 0.5, mieCoeff: 0.001, mieG: 0.80, elevation: 42, azimuth: 200 },
 };
 
 function applySkyParams() {
@@ -2799,6 +2800,40 @@ const WEATHER_STATES = {
     ambIntensity: 0.30,
     bloomStrength: 0.65,
     grain: 0.09,
+    rain: false,
+    lightning: false,
+  },
+  // happy+happy: pure sun + rainbow arch
+  rainbow: {
+    sky:     'rainbow',
+    zenith:  new THREE.Color(0x50aaff),
+    horizon: new THREE.Color(0xc8e8ff),
+    ground:  new THREE.Color(0x5a8c3a),
+    fogDensity: 0.002,
+    fogColor: new THREE.Color(0xd0e8ff),
+    dirColor: new THREE.Color(0xfffce8),
+    dirIntensity: 2.8,
+    ambColor: new THREE.Color(0xfff4e0),
+    ambIntensity: 1.0,
+    bloomStrength: 0.38,
+    grain: 0.008,
+    rain: false,
+    lightning: false,
+  },
+  // happy+sad: partly cloudy, no rain
+  cloudy: {
+    sky:     'overcast',
+    zenith:  new THREE.Color(0x8aabcc),
+    horizon: new THREE.Color(0xc8d8e8),
+    ground:  new THREE.Color(0x4a6040),
+    fogDensity: 0.014,
+    fogColor: new THREE.Color(0xb0c0cc),
+    dirColor: new THREE.Color(0xd0dce8),
+    dirIntensity: 1.4,
+    ambColor: new THREE.Color(0xaabbc8),
+    ambIntensity: 0.65,
+    bloomStrength: 0.12,
+    grain: 0.035,
     rain: false,
     lightning: false,
   },
@@ -2943,6 +2978,11 @@ function applyWeather(dt) {
       lightningFlashEnd = 0;
     }
   }
+
+  // ── Rainbow arch update ────────────────────────────────────────────────────
+  const rainbowTarget = activeWeatherLabel === 'rainbow' ? 1.0 : 0.0;
+  const rainbowOpacityUniform = rainbowArch.userData.mat.uniforms.uOpacity;
+  rainbowOpacityUniform.value += (rainbowTarget - rainbowOpacityUniform.value) * t;
 }
 
 function switchWeatherTo(label) {
@@ -2989,6 +3029,59 @@ function createSunDisc() {
 }
 const sunDiscGroup = createSunDisc();
 scene.add(sunDiscGroup);
+
+// ── Rainbow arch — fades in for happy+happy neural symbiosis ──────────────────
+function createRainbowArch() {
+  const mat = new THREE.ShaderMaterial({
+    uniforms: { uOpacity: { value: 0.0 } },
+    vertexShader: /* glsl */`
+      varying vec2 vUv;
+      void main() {
+        vUv = uv;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: /* glsl */`
+      uniform float uOpacity;
+      varying vec2  vUv;
+      vec3 hsl2rgb(float h, float s, float l) {
+        float c = (1.0 - abs(2.0 * l - 1.0)) * s;
+        float x = c * (1.0 - abs(mod(h * 6.0, 2.0) - 1.0));
+        float m = l - c * 0.5;
+        vec3  p;
+        if      (h < 1.0/6.0) p = vec3(c, x, 0.0);
+        else if (h < 2.0/6.0) p = vec3(x, c, 0.0);
+        else if (h < 3.0/6.0) p = vec3(0.0, c, x);
+        else if (h < 4.0/6.0) p = vec3(0.0, x, c);
+        else if (h < 5.0/6.0) p = vec3(x, 0.0, c);
+        else                   p = vec3(c, 0.0, x);
+        return p + m;
+      }
+      void main() {
+        // vUv.y: 0 = outer band (red), 1 = inner band (violet)
+        float hue   = vUv.y * 0.76;
+        float alpha = sin(vUv.y * 3.14159) * 0.72 * uOpacity;
+        vec3  col   = hsl2rgb(hue, 1.0, 0.58);
+        gl_FragColor = vec4(col, alpha);
+      }
+    `,
+    transparent: true,
+    depthWrite:  false,
+    side:        THREE.DoubleSide,
+    blending:    THREE.AdditiveBlending,
+  });
+  const geo   = new THREE.TorusGeometry(28, 4, 18, 120, Math.PI);
+  const mesh  = new THREE.Mesh(geo, mat);
+  const group = new THREE.Group();
+  group.name  = 'rainbowArch';
+  group.add(mesh);
+  group.userData.mat = mat;
+  // Arch base sits just below ground; peak reaches y≈24 above the city
+  group.position.set(0, -4, -85);
+  return group;
+}
+const rainbowArch = createRainbowArch();
+scene.add(rainbowArch);
 
 function updateSunDiscAppearance() {
   const elev = skyParams.elevation;
@@ -3752,8 +3845,18 @@ function _nucLabelColor(arousal, valence) {
 }
 
 // Map symbiosis → WEATHER_STATES: happy = sunny day, sad = rain, angry = dusk+lightning, fear = night black
-// Rebalanced so “sunny” appears whenever merged valence is neutral–positive; rain/night only when clearly negative or divergent.
+// 3-tier happy/sad system: happy+happy = rainbow, happy+sad = cloudy, sad+sad = rainy.
 function _symbiosisWeather(sym) {
+  // Check individual user emotion labels for the 3-tier system
+  const l1 = String(window.__dreamEEG1?.emotion?.label || '').toLowerCase();
+  const l2 = String(window.__dreamEEG2?.emotion?.label || '').toLowerCase();
+  if (l1 && l2) {
+    const h1 = l1 === 'happy', h2 = l2 === 'happy';
+    const s1 = l1 === 'sad',   s2 = l2 === 'sad';
+    if (h1 && h2)               return 'rainbow';
+    if ((h1 && s2) || (s1 && h2)) return 'cloudy';
+    if (s1 && s2)               return 'sad';
+  }
   const a = sym.arousal ?? 0.5;
   const v = sym.valence ?? 0.5;
   const score = sym.score ?? 0.5;
