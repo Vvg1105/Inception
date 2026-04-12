@@ -27,10 +27,11 @@ import time
 
 import numpy as np
 
+
 # ── Configuration ─────────────────────────────────────────────────────────────
-EMOTIONS     = ["sad", "happy"]
-N_TRIALS     = 100       # trials per emotion
-TRIAL_SECS   = 2         # seconds per trial
+EMOTIONS     = ["sad", "happy", "neutral", "angry"]
+N_TRIALS     = 10    # trials per emotion
+TRIAL_SECS   = 5         # seconds per trial
 REST_SECS    = 0.5       # rest between trials (not recorded)
 FS           = 250
 DATA_DIR     = os.path.join(os.path.dirname(__file__), "data")
@@ -186,19 +187,18 @@ class CytonEEGRecorder:
         if raw.size == 0:
             return raw.astype(np.float32), labels
 
-        # Filter each channel in place
         for c in range(raw.shape[1]):
             ch = np.ascontiguousarray(raw[:, c])
-            self._DataFilter.perform_bandpass_filter(
+            self._DataFilter.perform_bandpass(
                 ch, FS, 0.5, 45.0, 4,
                 self._FilterTypes.BUTTERWORTH.value, 0
             )
-            self._DataFilter.perform_bandstop_filter(
-                ch, FS, 50.0, 4.0, 4,
+            self._DataFilter.perform_bandstop(
+                ch, FS, 48.0, 52.0, 4,
                 self._FilterTypes.BUTTERWORTH.value, 0
             )
-            self._DataFilter.perform_bandstop_filter(
-                ch, FS, 60.0, 4.0, 4,
+            self._DataFilter.perform_bandstop(
+                ch, FS, 58.0, 62.0, 4,
                 self._FilterTypes.BUTTERWORTH.value, 0
             )
             raw[:, c] = ch
