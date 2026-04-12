@@ -1,5 +1,5 @@
 """
-EEGNet for binary emotion decoding (sad / happy).
+EEGNet / EmotionMLP for multi-class emotion decoding.
 
 Architecture: Lawhern et al. 2018, adapted for short windows.
 
@@ -7,7 +7,8 @@ Input shape: (batch, 1, n_channels, n_timepoints)
   - n_channels   = 8  (BCI Core-8)
   - n_timepoints = 250 (1 s at 250 Hz)
 
-Output: (batch, n_classes) logits
+Output: (batch, n_classes) logits — class order follows EMOTIONS below.
+Must match collect_data.py EMOTIONS order for consistent label indices.
 """
 import torch
 import torch.nn as nn

@@ -17,9 +17,8 @@ Output
 
 Binary vs multi-class
 ----------------------
-  Set TRAIN_EMOTIONS in this file to a list of two names from eeg/eegnet.py EMOTIONS
-  (e.g. ["sad", "happy"]) to train a 2-way classifier; samples with other labels are
-  dropped.  Use TRAIN_EMOTIONS = None for all classes in EMOTIONS.
+  TRAIN_EMOTIONS = None  → train on every class in eeg/eegnet.py EMOTIONS (e.g. 3-way).
+  TRAIN_EMOTIONS = ["happy", "sad"]  → binary; other classes in the data are dropped.
 
 Run (pick one board; data must live under eeg/data/<board>/ from collect_data.py):
   python eeg/train.py --cyton
@@ -51,11 +50,10 @@ CFG_PATH   = os.path.join(MODEL_DIR, "eegnet_config.json")
 MODEL = "eegnet"
 
 # ── Label selection ───────────────────────────────────────────────────────────
-# Subset of EMOTIONS to train on. Set to None to use all emotions.
+# Subset of eegnet.EMOTIONS to train on, or None = all classes (multi-class).
 # Examples:
-#   TRAIN_EMOTIONS = ["sad", "happy"]      # binary classifier, ignores neutral data
-#   TRAIN_EMOTIONS = ["happy", "neutral"]  # binary, ignores sad data
-#   TRAIN_EMOTIONS = None                  # use all emotions (default)
+#   TRAIN_EMOTIONS = None                       # neutral + happy + sad (matches eegnet.py)
+#   TRAIN_EMOTIONS = ["happy", "neutral"]       # binary subset
 TRAIN_EMOTIONS = ["sad", "happy"]
 
 # ── Hyper-parameters ──────────────────────────────────────────────────────────

@@ -1635,6 +1635,27 @@ fetch(`${BACKEND}/health`, { signal: AbortSignal.timeout(1500) })
   .then(() => { backendOnline = true; console.log('[Backend] online'); })
   .catch(() => { console.log('[Backend] offline — using local material generation'); });
 
+// ── ElevenLabs TTS via backend proxy ─────────────────────────────────────────
+let _dreamSpeakAudio = null;
+async function dreamSpeak(text) {
+  if (!backendOnline) return;
+  try {
+    if (_dreamSpeakAudio) { _dreamSpeakAudio.pause(); _dreamSpeakAudio = null; }
+    const res = await fetch(`${BACKEND}/api/tts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!res.ok) { console.warn('[TTS]', res.status); return; }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    _dreamSpeakAudio = new Audio(url);
+    _dreamSpeakAudio.addEventListener('ended', () => URL.revokeObjectURL(url));
+    await _dreamSpeakAudio.play();
+  } catch (e) { console.warn('[TTS] dreamSpeak failed:', e); }
+}
+
 async function getLLMMaterials(parsed, emo) {
   if (backendOnline) {
     try {
@@ -2233,6 +2254,7 @@ function openPopup(cx, cy) {
   if (ps) ps.style.display = 'block';
   if (pp) pp.style.display = 'none';
   setTimeout(() => objectInput.focus(), 40);
+  dreamSpeak('What are we imagining today?');
 }
 
 function closePopup() {
@@ -2308,12 +2330,14 @@ async function runVisionPipeline(prompt, pos, parsed) {
           const msg = JSON.parse(line);
           if (msg.stage === 'image') {
             showImaginedImage(msg.image_b64, msg.mime);
+            dreamSpeak('I am getting information that you are imagining something like this.');
           } else if (msg.stage === 'classified') {
             clearTimeout(t);
             parsed.base = msg.place_key;
             hideNeuralPipelineUI();
             showTribeBrainFromVision(msg);
             if (msg.narration) showNarration(msg.narration);
+            dreamSpeak('Gathering neural data from you imagining this, from the tribe model, to decode element to place.');
             placeObject(`${msg.classified_label}: ${prompt}`, pos, parsed);
             placed = true;
           } else if (msg.stage === 'error') {
@@ -4739,6 +4763,7 @@ const voice = {
         voiceHud.className = 'command visible';
         voiceLabel.textContent = 'listening…';
         console.info('[Voice] wake word detected — ready for command');
+        dreamSpeak('What are we imagining today?');
       }
       return;
     }

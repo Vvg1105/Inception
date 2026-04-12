@@ -49,6 +49,7 @@ EMOTION_AV: dict[str, tuple[float, float]] = {
     "happy":   (0.70, 0.85),
     "sad":     (0.25, 0.20),
     "neutral": (0.50, 0.50),
+    "angry":   (0.85, 0.25),
 }
 
 EMOTION_INTERVAL_S = 0.5

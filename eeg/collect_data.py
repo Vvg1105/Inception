@@ -29,7 +29,7 @@ import numpy as np
 
 
 # ── Configuration ─────────────────────────────────────────────────────────────
-EMOTIONS     = ["sad", "happy", "angry"]
+EMOTIONS     = ["sad", "happy", "neutral"]  # same order as eeg/eegnet.py EMOTIONS
 N_TRIALS     = 10    # trials per emotion
 TRIAL_SECS   = 5         # seconds per trial
 REST_SECS    = 0.5       # rest between trials (not recorded)

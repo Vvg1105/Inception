@@ -693,3 +693,38 @@ async def proxy_glb(url: str = Query(...)):
         )
     except requests.RequestException as exc:
         raise HTTPException(status_code=502, detail=str(exc))
+
+
+# ── ElevenLabs TTS proxy ─────────────────────────────────────────────────────
+
+_ELEVEN_VOICE_ID = "21m00Tcm4TlvDq8ikWAM"  # Rachel
+
+
+class TTSRequest(BaseModel):
+    text: str
+    voice_id: str = _ELEVEN_VOICE_ID
+
+
+@app.post("/api/tts")
+async def tts_proxy(req: TTSRequest):
+    """Proxy ElevenLabs TTS so the API key stays server-side."""
+    api_key = os.getenv("ELEVEN_LABS_API_KEY", "")
+    if not api_key:
+        raise HTTPException(status_code=500, detail="ELEVEN_LABS_API_KEY not set")
+    async with httpx.AsyncClient(timeout=30) as client:
+        r = await client.post(
+            f"https://api.elevenlabs.io/v1/text-to-speech/{req.voice_id}",
+            headers={"xi-api-key": api_key, "Content-Type": "application/json"},
+            json={
+                "text": req.text,
+                "model_id": "eleven_flash_v2_5",
+                "voice_settings": {"stability": 0.5, "similarity_boost": 0.75},
+            },
+        )
+    if r.status_code != 200:
+        raise HTTPException(status_code=r.status_code, detail=r.text[:300])
+    return StreamingResponse(
+        iter([r.content]),
+        media_type="audio/mpeg",
+        headers={"Cache-Control": "no-cache"},
+    )

@@ -30,9 +30,10 @@ WebSocket JSON payload (sent every 100 ms):
   }
 
 Run:
-  python backend/eeg_decode_dual.py                              # both real
+  python backend/eeg_decode_dual.py                              # both real (needs gpype + Cyton)
   python backend/eeg_decode_dual.py --mock                       # both fake
-  python backend/eeg_decode_dual.py --mock-user1                 # user1 fake
+  python backend/eeg_decode_dual.py --mock-user1 --cyton-port …  # Cyton only (no g.tec / gpype)
+  python backend/eeg_decode_dual.py --mock-user1                 # user1 fake; Cyton auto-detect
   python backend/eeg_decode_dual.py --cyton-port /dev/cu.usbserial-XXXX
   python backend/eeg_decode_dual.py --port 8765
 
@@ -48,6 +49,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import importlib.util
 import json
 import math
 import os
@@ -545,6 +547,15 @@ if __name__ == "__main__":
         help="Disable BLINK paper detector for both users; amplitude double-blink only",
     )
     args = parser.parse_args()
+
+    if not args.mock and not args.mock_user1:
+        if importlib.util.find_spec("gpype") is None:
+            raise SystemExit(
+                "gpype is not installed — User 1 (g.tec) cannot start.\n"
+                "  • Install g.tec gpype in this environment, or\n"
+                "  • Cyton only:  python backend/eeg_decode_dual.py --mock-user1 "
+                "--cyton-port /dev/cu.usbserial-…\n"
+            )
 
     print("\n  ── Neural Symbiosis  ─────────────────────────────")
     print(f"  port: ws://127.0.0.1:{args.port}\n")
