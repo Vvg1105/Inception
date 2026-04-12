@@ -175,17 +175,34 @@ def train():
     for e in active_emotions:
         if e not in EMOTIONS:
             sys.exit(f"[ERROR] '{e}' not in EMOTIONS {EMOTIONS} — check TRAIN_EMOTIONS.")
-    orig_indices = [EMOTIONS.index(e) for e in active_emotions]
-    label_remap  = {orig: new for new, orig in enumerate(orig_indices)}
     if TRAIN_EMOTIONS is not None:
-        print(f"Training on subset: {active_emotions}  (from original indices {orig_indices})")
+        print(f"Training on subset: {active_emotions}")
 
     def load_run(n):
-        raw    = np.load(os.path.join(DATA_DIR, f"run_{n:03d}_raw.npy"))
-        labels = np.load(os.path.join(DATA_DIR, f"run_{n:03d}_labels.npy"))
-        mask   = np.isin(labels, orig_indices)
+        raw       = np.load(os.path.join(DATA_DIR, f"run_{n:03d}_raw.npy"))
+        labels_raw = np.load(os.path.join(DATA_DIR, f"run_{n:03d}_labels.npy"))
+        meta_path = os.path.join(DATA_DIR, f"run_{n:03d}_meta.json")
+
+        # Read per-run emotion list so index 2 in an old run (neutral) is not
+        # confused with index 2 in a new run (angry) — they have different metas.
+        if os.path.exists(meta_path):
+            with open(meta_path) as f:
+                run_emotions = json.load(f)["emotions"]
+        else:
+            # Legacy runs with no meta: assume they used the current EMOTIONS list
+            run_emotions = EMOTIONS
+            print(f"  [warn] run_{n:03d} has no meta file — assuming emotions={EMOTIONS}")
+
+        # Build a mapping from this run's label index → active_emotions index.
+        # Only keep samples whose emotion name appears in active_emotions.
+        keep_map = {}  # run label index → new label index
+        for run_idx, emo_name in enumerate(run_emotions):
+            if emo_name in active_emotions:
+                keep_map[run_idx] = active_emotions.index(emo_name)
+
+        mask   = np.array([l in keep_map for l in labels_raw])
         raw    = raw[mask]
-        labels = np.array([label_remap[l] for l in labels[mask]], dtype=np.int64)
+        labels = np.array([keep_map[l] for l in labels_raw[mask]], dtype=np.int64)
         return raw, labels
 
     print(f"\nWindowing  (window={WINDOW} samples = {WINDOW/FS*1000:.0f} ms,"

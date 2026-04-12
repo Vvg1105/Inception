@@ -187,8 +187,8 @@ class LiveDecoder(EEGDecoder):
         p.connect(notch50,  notch60)
         p.connect(notch60,  buf)
 
-        config_path = os.path.join(PROJECT_ROOT, "eeg", "models", "eegnet_config.json")
-        weights_path = os.path.join(PROJECT_ROOT, "eeg", "models", "eegnet_emotion.pt")
+        config_path = os.path.join(PROJECT_ROOT, "eeg", "models", "eegnet_config_gtec.json")
+        weights_path = os.path.join(PROJECT_ROOT, "eeg", "models", "eegnet_emotion_gtec.pt")
 
         with open(config_path) as f:
             cfg = json.load(f)
