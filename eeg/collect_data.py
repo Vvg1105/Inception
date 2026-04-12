@@ -29,7 +29,7 @@ import numpy as np
 
 
 # ── Configuration ─────────────────────────────────────────────────────────────
-EMOTIONS     = ["sad", "happy", "neutral", "angry"]
+EMOTIONS     = ["sad", "happy", "angry"]
 N_TRIALS     = 10    # trials per emotion
 TRIAL_SECS   = 5         # seconds per trial
 REST_SECS    = 0.5       # rest between trials (not recorded)
@@ -390,13 +390,18 @@ def main():
         print(f"    {e:>8s} ({i}): {count} samples  ({count/FS:.1f}s)")
 
     # ── Save (numbered run) ───────────────────────────────────────────────────
+    import json
     run_num     = _next_run_number(DATA_DIR)
     raw_path    = os.path.join(DATA_DIR, f"run_{run_num:03d}_raw.npy")
     labels_path = os.path.join(DATA_DIR, f"run_{run_num:03d}_labels.npy")
+    meta_path   = os.path.join(DATA_DIR, f"run_{run_num:03d}_meta.json")
     np.save(raw_path,    raw)
     np.save(labels_path, labels)
+    with open(meta_path, "w") as f:
+        json.dump({"emotions": EMOTIONS}, f)
     print(f"\n  Saved run {run_num:03d}: {raw_path}")
     print(f"  Saved run {run_num:03d}: {labels_path}")
+    print(f"  Saved run {run_num:03d}: {meta_path}  {EMOTIONS}")
     existing = sorted(_find_runs(DATA_DIR))
     print(f"  Total runs on disk: {len(existing)} "
           f"({', '.join(f'run_{r:03d}' for r in existing)})")
