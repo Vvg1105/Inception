@@ -63,58 +63,60 @@ R_TOP, R_BOT = 386, 374
 # Iris gaze computation
 # ═══════════════════════════════════════════════════════════════════════════
 
-def iris_h_ratio(lm: list, iris: int, inner: int, outer: int) -> float | None:
-    """Where the iris sits between outer and inner eye corner (0..1). 0.5 = center."""
-    dx = lm[inner].x - lm[outer].x
-    if abs(dx) < 1e-6:
+def iris_offset_x(lm: list, iris: int, inner: int, outer: int) -> float | None:
+    """Iris displacement from eye center, normalized by half eye-width. Flip-safe."""
+    cx = (lm[inner].x + lm[outer].x) / 2
+    half_w = abs(lm[inner].x - lm[outer].x) / 2
+    if half_w < 1e-6:
         return None
-    return (lm[iris].x - lm[outer].x) / dx
+    return (lm[iris].x - cx) / half_w
 
 
-def iris_v_ratio(lm: list, iris: int, top: int, bot: int) -> float | None:
-    """Where the iris sits between top and bottom eyelid (0..1). 0.5 = center."""
-    dy = lm[bot].y - lm[top].y
-    if abs(dy) < 1e-6:
+def iris_offset_y(lm: list, iris: int, top: int, bot: int) -> float | None:
+    """Iris displacement from eye center, normalized by half eye-height. Positive = down."""
+    cy = (lm[top].y + lm[bot].y) / 2
+    half_h = abs(lm[bot].y - lm[top].y) / 2
+    if half_h < 1e-6:
         return None
-    return (lm[iris].y - lm[top].y) / dy
+    return (lm[iris].y - cy) / half_h
 
 
 def eye_openness(lm: list, top: int, bot: int) -> float:
     return abs(lm[bot].y - lm[top].y)
 
 
-H_GAIN = 8.0   # iris-to-corner ratio is small → need high gain
-V_GAIN = 2.5   # eyelids are close together → ratio swings fast, keep gain low
+H_GAIN = 4.0
+V_GAIN = 3.0
 
 
 def compute_gaze(lm: list, sens: float = 1.0) -> dict[str, Any]:
-    lh = iris_h_ratio(lm, L_IRIS, L_INNER, L_OUTER)
-    rh = iris_h_ratio(lm, R_IRIS, R_INNER, R_OUTER)
-    lv = iris_v_ratio(lm, L_IRIS, L_TOP, L_BOT)
-    rv = iris_v_ratio(lm, R_IRIS, R_TOP, R_BOT)
+    lx = iris_offset_x(lm, L_IRIS, L_INNER, L_OUTER)
+    rx = iris_offset_x(lm, R_IRIS, R_INNER, R_OUTER)
+    ly = iris_offset_y(lm, L_IRIS, L_TOP, L_BOT)
+    ry = iris_offset_y(lm, R_IRIS, R_TOP, R_BOT)
 
-    h_ratios = [r for r in (lh, rh) if r is not None]
-    v_ratios = [r for r in (lv, rv) if r is not None]
+    hx = [v for v in (lx, rx) if v is not None]
+    vy = [v for v in (ly, ry) if v is not None]
 
-    h_ratio = sum(h_ratios) / len(h_ratios) if h_ratios else 0.5
-    v_ratio = sum(v_ratios) / len(v_ratios) if v_ratios else 0.5
+    avg_x = sum(hx) / len(hx) if hx else 0.0
+    avg_y = sum(vy) / len(vy) if vy else 0.0
 
-    x = (h_ratio - 0.5) * H_GAIN * sens
-    y = (0.5 - v_ratio) * V_GAIN * sens
+    x = avg_x * H_GAIN * sens
+    y = -avg_y * V_GAIN * sens
 
     x = max(-1.4, min(1.4, x))
     y = max(-1.4, min(1.4, y))
 
     lo = eye_openness(lm, L_TOP, L_BOT)
     ro = eye_openness(lm, R_TOP, R_BOT)
-    blink = ((lo + ro) / 2) < 0.018
+    blink = False
 
     return {
         "x": round(x, 4),
         "y": round(y, 4),
         "blink": blink,
-        "h_ratio": round(h_ratio, 4),
-        "v_ratio": round(v_ratio, 4),
+        "avg_x": round(avg_x, 4),
+        "avg_y": round(avg_y, 4),
     }
 
 
@@ -217,8 +219,8 @@ async def track_loop(port: int, show_preview: bool, sens: float) -> None:
                     if len(lm) >= 474:
                         gaze = compute_gaze(lm, sens)
 
-                        smooth_x += (gaze["x"] - smooth_x) * 0.45
-                        smooth_y += (gaze["y"] - smooth_y) * 0.25
+                        smooth_x += (gaze["x"] - smooth_x) * 0.55
+                        smooth_y += (gaze["y"] - smooth_y) * 0.45
 
                         blink_now = gaze["blink"]
                         capture = prev_blink and not blink_now
@@ -239,7 +241,7 @@ async def track_loop(port: int, show_preview: bool, sens: float) -> None:
                         b = "BLINK" if blink_now else "     "
                         print(
                             f"\r  gaze=({smooth_x:+.2f}, {smooth_y:+.2f})  "
-                            f"iris=({gaze['h_ratio']:.3f}, {gaze['v_ratio']:.3f})  "
+                            f"iris=({gaze['avg_x']:+.3f}, {gaze['avg_y']:+.3f})  "
                             f"{b}  clients={len(clients)}",
                             end="", flush=True,
                         )

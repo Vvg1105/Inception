@@ -1,12 +1,19 @@
 """
 EEG live decoder — runs in Python, sends emotion + blink to the browser every 100ms.
 
+**Two headsets (GTECH BCICore-8 + OpenBCI Cyton)** — use the dual decoder instead of this file:
+
+  python backend/eeg_decode_dual.py
+
+This single-board script is for **one** g.tec headset only. The browser’s default
+Neural Symbiosis flow connects to the **dual** WebSocket (`eeg_decode_dual.py`).
+
 Architecture:
   Python (this file)                        Browser (index.html)
   ─────────────────                         ───────────────────
   g.tec BCICore-8 → gpype pipeline          ← WebSocket ←
   ↓ EEGBuffer (eeg/eeg_stream.py)           reads window.__dreamEEG
-  check_blink_state() + decode_emotion()    ↓
+  BlinkDetector (BLINK paper) + decode_emotion()    ↓
   → { emotion, blink, capture }  ──ws──►   mood pad + fog + light + colour
                                             blink → open place UI
 
@@ -28,7 +35,7 @@ import os
 import sys
 import time
 import threading
-from typing import Any
+from typing import Any, Optional
 
 try:
     import websockets
@@ -135,11 +142,18 @@ class LiveDecoder(EEGDecoder):
     Real EEG decoder using the gpype pipeline and eeg/eeg_stream.py.
 
     Pipeline: BCICore8 → Bandpass(0.5–45) → Notch 50 → Notch 60 → EEGBuffer
-    Blink:    check_blink_state() — polled every tick; triggers on rising edge
+    Blink:    BlinkDetector (BLINK paper, eeg/blink_detector.py) when enabled —
+              feed from EEGBuffer; falls back to amplitude double-blink until calibrated.
     Emotion:  decode_emotion() — called every 500 ms, averaged over last 3 s
     """
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        *,
+        blink_profile: Optional[str] = None,
+        blink_frontal_ch: int = 0,
+        use_blink_paper: bool = True,
+    ) -> None:
         self._pipeline = None
         self._last_arousal = 0.5
         self._last_valence = 0.5
@@ -148,6 +162,11 @@ class LiveDecoder(EEGDecoder):
         # History stores raw per-class probability dicts for smoothing.
         self._prob_history: collections.deque = collections.deque(maxlen=EMOTION_HISTORY_N)
         self._next_emotion_t = 0.0  # monotonic time for next decode_emotion() call
+        self._use_blink_paper = use_blink_paper
+        self._blink_det: Any = None
+        self._blink_frontal_ch = blink_frontal_ch
+        self._blink_profile_path = blink_profile
+        self._last_blink_feed_t: Optional[float] = None
 
     def setup(self) -> None:
         import torch
@@ -216,13 +235,40 @@ class LiveDecoder(EEGDecoder):
         self._pipeline = p
         print("  gpype pipeline started")
 
+        if self._use_blink_paper:
+            from eeg.blink_detector import BlinkDetector
+            from eeg.eeg_stream import FS as _FS
+
+            self._blink_det = BlinkDetector(
+                fs=int(_FS),
+                frontal_ch=self._blink_frontal_ch,
+                profile=self._blink_profile_path,
+            )
+
     def read_raw(self) -> Any:
         return None
 
     def decode(self, raw: Any) -> dict[str, Any]:
-        from eeg.eeg_stream import check_blink_state_old, decode_emotion
+        from eeg.eeg_stream import FS, _buffer, check_blink_state_old, decode_emotion
 
-        blink = check_blink_state_old()
+        if self._blink_det is not None:
+            now = time.monotonic()
+            if self._last_blink_feed_t is None:
+                self._last_blink_feed_t = now
+            else:
+                dt = now - self._last_blink_feed_t
+                n_new = min(max(1, int(dt * FS)), 500)
+                if _buffer is not None:
+                    w = _buffer.latest(n_new)
+                    if w is not None:
+                        self._blink_det.feed(w)
+                self._last_blink_feed_t = now
+            if self._blink_det.ready:
+                blink = self._blink_det.check()
+            else:
+                blink = check_blink_state_old()
+        else:
+            blink = check_blink_state_old()
 
         # Only call decode_emotion() every 500 ms to avoid over-sampling.
         now = time.monotonic()
@@ -385,6 +431,11 @@ def free_port(port: int) -> None:
         time.sleep(1.0)   # give the OS time to release the port after SIGKILL
 
 
+def _default_blink_npz(name: str) -> Optional[str]:
+    p = os.path.join(PROJECT_ROOT, "eeg", "models", name)
+    return p if os.path.isfile(p) else None
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="EEG live decode → WebSocket")
     parser.add_argument("--port", type=int, default=8765)
@@ -392,6 +443,23 @@ if __name__ == "__main__":
         "--mock",
         action="store_true",
         help="Use fake sine-wave decoder (no hardware needed)",
+    )
+    parser.add_argument(
+        "--blink-profile",
+        default="",
+        help="Path to blink_*.npz from tools/calibrate_blink.py; "
+             "if omitted, uses eeg/models/blink_user1.npz when present",
+    )
+    parser.add_argument(
+        "--no-blink-paper",
+        action="store_true",
+        help="Disable BLINK paper detector; use amplitude double-blink only",
+    )
+    parser.add_argument(
+        "--blink-ch",
+        type=int,
+        default=0,
+        help="Frontal EEG column index for BlinkDetector (default: 0 = Fp2 on BCICore-8)",
     )
     args = parser.parse_args()
 
@@ -401,6 +469,11 @@ if __name__ == "__main__":
     if args.mock:
         decoder = MockDecoder()
     else:
-        decoder = LiveDecoder()
+        blink_path = args.blink_profile.strip() or _default_blink_npz("blink_user1.npz")
+        decoder = LiveDecoder(
+            blink_profile=blink_path,
+            blink_frontal_ch=args.blink_ch,
+            use_blink_paper=not args.no_blink_paper,
+        )
 
     asyncio.run(main(decoder, args.port))

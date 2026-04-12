@@ -4,16 +4,15 @@ cyton_stream.py — BrainFlow decoder for OpenBCI Cyton board (USB dongle).
 Architecture:
   OpenBCI Cyton (USB serial dongle)
     → BrainFlow BoardShim (polling thread, 40 ms drain interval)
+      → raw EEG fed to BlinkDetector (BLINK algorithm, eeg/blink_detector.py)
       → CytonBuffer (thread-safe ring buffer + scipy IIR filter bank)
-        → BlinkDetector (BLINK algorithm, eeg/blink_detector.py)
         → _run_brainflow_emotion() — BrainFlow RESTFULNESS classifier
               relaxed (≥ 0.8) → "happy"
               neutral (≥ 0.4) → "sad"
               stressed (< 0.4) → "angry"
 
-Blink calibration (run once before the demo):
+Blink calibration (run once before the demo; raw board data, match --ch):
     python tools/calibrate_blink.py --headset cyton --label user2 --ch 0
-    # places Fp1/Fp2 electrode on channel 0 for best blink signal
 
 Usage:
     from eeg.cyton_stream import CytonDecoder
@@ -36,7 +35,7 @@ import os
 import sys
 import threading
 import time
-from typing import Any
+from typing import Any, Optional
 
 import numpy as np
 
@@ -167,7 +166,14 @@ class CytonDecoder:
     Thread-safe.  Call setup() → start() → poll decode() → stop().
     """
 
-    def __init__(self, serial_port: str = ""):
+    def __init__(
+        self,
+        serial_port: str = "",
+        *,
+        blink_profile: Optional[str] = None,
+        frontal_ch: int = 0,
+        use_blink_paper: bool = True,
+    ):
         if not HAS_BRAINFLOW:
             raise ImportError("pip install brainflow")
         if not HAS_SCIPY:
@@ -192,6 +198,15 @@ class CytonDecoder:
         self._last_valence = 0.5
         self._last_focus   = 0.5
         self._last_label   = ""
+
+        self._use_blink_paper = use_blink_paper
+        self._blink_det: "BlinkDetector | None" = None
+        if use_blink_paper:
+            self._blink_det = BlinkDetector(
+                fs=FS,
+                frontal_ch=frontal_ch,
+                profile=blink_profile,
+            )
 
     def start(self) -> None:
         """Open BrainFlow session, prepare ML classifier, start polling thread."""
@@ -250,6 +265,8 @@ class CytonDecoder:
                         # data shape: (n_total_channels, n_samples)
                         # transpose to (n_samples, n_channels)
                         eeg = data[self._eeg_channels, :].T.astype(np.float64)
+                        if self._blink_det is not None:
+                            self._blink_det.feed(eeg)
                         self._buf.push(eeg)
             except Exception:
                 pass
@@ -308,7 +325,10 @@ class CytonDecoder:
             label                  : str  ("happy" | "sad" | "angry" | "")
             blink                  : bool
         """
-        blink = self.check_blink()
+        if self._blink_det is not None and self._blink_det.ready:
+            blink = self._blink_det.check()
+        else:
+            blink = self.check_blink()
 
         now = time.monotonic()
         if now >= self._next_emotion_t:

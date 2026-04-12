@@ -1,6 +1,10 @@
 """
 eeg_decode_dual.py — Dual-user EEG decoder for the Neural Symbiosis demo.
 
+**This is the EEG entry point when both headsets are used** (with `index.html`
+auto-connecting the dual WebSocket on port 8765). For a single g.tec board only,
+use `eeg_decode.py` instead.
+
 User 1 : GTECH BCICore-8 (Bluetooth via gpype)   → existing LiveDecoder
 User 2 : OpenBCI Cyton  (USB dongle via BrainFlow) → new CytonDecoder
 
@@ -32,6 +36,9 @@ Run:
   python backend/eeg_decode_dual.py --cyton-port /dev/cu.usbserial-XXXX
   python backend/eeg_decode_dual.py --port 8765
 
+  After running tools/calibrate_blink.py for each headset, profiles load from
+  eeg/models/blink_user1.npz (GTECH) and blink_user2.npz (Cyton) unless overridden.
+
 Press Enter in the terminal at any time to hand creation permission to the
 other user.  The active user is shown in the terminal readout and pushed to
 the browser in every WebSocket message.
@@ -47,7 +54,7 @@ import os
 import sys
 import time
 import threading
-from typing import Any
+from typing import Any, Optional
 
 try:
     import websockets
@@ -198,14 +205,35 @@ def _run_mock(user: int, mock: _MockUser, interval: float = 0.1) -> None:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# Blink profile resolution (BLINK paper, eeg/blink_detector.py)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _resolve_blink_npz(cli: str, default_name: str) -> Optional[str]:
+    """Explicit path from CLI wins; else use eeg/models/{default_name} if it exists."""
+    if cli.strip():
+        return cli.strip()
+    p = os.path.join(PROJECT_ROOT, "eeg", "models", default_name)
+    return p if os.path.isfile(p) else None
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # Real User 1 — GTECH BCICore-8 via existing LiveDecoder
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def _run_live_user1(interval: float = 0.1) -> None:
+def _run_live_user1(
+    interval: float,
+    blink_profile: Optional[str],
+    blink_ch: int,
+    no_blink_paper: bool,
+) -> None:
     from backend.eeg_decode import LiveDecoder
     import eeg.eeg_stream as _es
     print("  [ ] User 1  GTECH BCICore-8   connecting via Bluetooth …", flush=True)
-    dec = LiveDecoder()
+    dec = LiveDecoder(
+        blink_profile=blink_profile,
+        blink_frontal_ch=blink_ch,
+        use_blink_paper=not no_blink_paper,
+    )
     dec.setup()
     print("  [✓] User 1  GTECH BCICore-8   connected", flush=True)
     _mark_connected(1)
@@ -229,7 +257,13 @@ def _run_live_user1(interval: float = 0.1) -> None:
 # Real User 2 — OpenBCI Cyton via BrainFlow + CytonDecoder
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def _run_cyton_user2(serial_port: str, interval: float = 0.1) -> None:
+def _run_cyton_user2(
+    serial_port: str,
+    interval: float,
+    blink_profile: Optional[str],
+    blink_ch: int,
+    no_blink_paper: bool,
+) -> None:
     """
     Streams from the Cyton board and classifies emotion via BrainFlow's built-in
     RESTFULNESS classifier (no external model weights required).
@@ -238,7 +272,12 @@ def _run_cyton_user2(serial_port: str, interval: float = 0.1) -> None:
 
     port_label = serial_port or "auto-detect"
     print(f"  [ ] User 2  OpenBCI Cyton      connecting via USB ({port_label}) …", flush=True)
-    dec = CytonDecoder(serial_port=serial_port)
+    dec = CytonDecoder(
+        serial_port=serial_port,
+        blink_profile=blink_profile,
+        frontal_ch=blink_ch,
+        use_blink_paper=not no_blink_paper,
+    )
     dec.start()
     print("  [✓] User 2  OpenBCI Cyton      connected", flush=True)
     _mark_connected(2)
@@ -282,16 +321,43 @@ def _stdin_thread() -> None:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def _symbiosis(s1: dict, s2: dict) -> dict[str, Any]:
+    """
+    Alignment score + label. Previously almost everything read as "resonant" because
+    Manhattan distance stays small when both users sit in the same quadrant.
+
+    Uses Euclidean distance in A/V space (normalized), optional penalty when
+    classifiers disagree (happy vs sad/angry), and wider tier thresholds.
+    """
     a1, v1 = s1["arousal"], s1["valence"]
     a2, v2 = s2["arousal"], s2["valence"]
     ca = (a1 + a2) / 2
     cv = (v1 + v2) / 2
-    divergence = (abs(a1 - a2) + abs(v1 - v2)) / 2
-    score = round(1.0 - divergence, 4)
-    if   score > 0.80: label = "resonant"
-    elif score > 0.60: label = "entangled"
-    elif score > 0.40: label = "drifting"
-    else:              label = "divergent"
+
+    # Max distance across unit square diagonal = sqrt(2); normalize to ~[0, 1]
+    d_euc = math.hypot(a1 - a2, v1 - v2) / math.sqrt(2.0)
+
+    # Keep happy/sad from decoders: opposing labels add virtual distance
+    t1 = (s1.get("label") or "").strip().lower()
+    t2 = (s2.get("label") or "").strip().lower()
+    pos = {"happy"}
+    neg = {"sad", "angry"}
+    lab_penalty = 0.0
+    if t1 and t2:
+        if (t1 in pos and t2 in neg) or (t1 in neg and t2 in pos):
+            lab_penalty = 0.18
+
+    divergence = min(1.0, d_euc + lab_penalty)
+    score = round(max(0.0, min(1.0, 1.0 - divergence)), 4)
+
+    # Wider bands so "resonant" is rare (true lock-step + matching labels)
+    if score >= 0.88:
+        label = "resonant"
+    elif score >= 0.68:
+        label = "entangled"
+    elif score >= 0.42:
+        label = "drifting"
+    else:
+        label = "divergent"
     return {"arousal": round(ca, 4), "valence": round(cv, 4),
             "score": score, "label": label}
 
@@ -447,12 +513,36 @@ if __name__ == "__main__":
                         help="Fake User 1 only; real Cyton for User 2")
     parser.add_argument("--cyton-port",  default="",
                         help="Serial port for Cyton dongle, e.g. /dev/cu.usbserial-XXXX")
+    parser.add_argument(
+        "--blink-profile-u1", default="",
+        help="Path to blink .npz for User 1 (GTECH); default eeg/models/blink_user1.npz",
+    )
+    parser.add_argument(
+        "--blink-profile-u2", default="",
+        help="Path to blink .npz for User 2 (Cyton); default eeg/models/blink_user2.npz",
+    )
+    parser.add_argument(
+        "--blink-ch-u1", type=int, default=0,
+        help="Frontal EEG column for User 1 BlinkDetector (default: 0)",
+    )
+    parser.add_argument(
+        "--blink-ch-u2", type=int, default=0,
+        help="Frontal EEG column for User 2 BlinkDetector (default: 0)",
+    )
+    parser.add_argument(
+        "--no-blink-paper",
+        action="store_true",
+        help="Disable BLINK paper detector for both users; amplitude double-blink only",
+    )
     args = parser.parse_args()
 
     print("\n  ── Neural Symbiosis  ─────────────────────────────")
     print(f"  port: ws://127.0.0.1:{args.port}\n")
 
     _free_port(args.port)
+
+    blink_u1 = _resolve_blink_npz(args.blink_profile_u1, "blink_user1.npz")
+    blink_u2 = _resolve_blink_npz(args.blink_profile_u2, "blink_user2.npz")
 
     # ── Start decoder threads ──────────────────────────────────────────────────
     if args.mock:
@@ -474,17 +564,32 @@ if __name__ == "__main__":
             daemon=True, name="mock-u1"
         ).start()
         threading.Thread(
-            target=_run_cyton_user2, args=(args.cyton_port,),
+            target=_run_cyton_user2,
+            args=(
+                args.cyton_port,
+                0.1,
+                blink_u2,
+                args.blink_ch_u2,
+                args.no_blink_paper,
+            ),
             daemon=True, name="cyton-u2"
         ).start()
 
     else:
         threading.Thread(
             target=_run_live_user1,
+            args=(0.1, blink_u1, args.blink_ch_u1, args.no_blink_paper),
             daemon=True, name="gtech-u1"
         ).start()
         threading.Thread(
-            target=_run_cyton_user2, args=(args.cyton_port,),
+            target=_run_cyton_user2,
+            args=(
+                args.cyton_port,
+                0.1,
+                blink_u2,
+                args.blink_ch_u2,
+                args.no_blink_paper,
+            ),
             daemon=True, name="cyton-u2"
         ).start()
 

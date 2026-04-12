@@ -32,10 +32,20 @@ python eye_track.py --sens 1.5       # increase gaze sensitivity
 
 **4 — EEG decoder** (emotion + blink every 100 ms):
 
+**Neural Symbiosis — two headsets** (g.tec BCICore-8 + OpenBCI Cyton on one machine). This is what `index.html` auto-connects to on port 8765:
+
 ```bash
 cd backend
-python eeg_decode.py --mock          # fake sine-wave emotions + blink
-python eeg_decode.py                 # real hardware (edit EEGDecoder subclass)
+python eeg_decode_dual.py --mock                    # both users fake
+python eeg_decode_dual.py                           # both real (BLE + USB Cyton)
+python eeg_decode_dual.py --cyton-port /dev/cu.usbserial-XXXX
+```
+
+**Single headset** (g.tec only — use the World panel “EEG (single)” connect instead of dual):
+
+```bash
+python eeg_decode.py --mock
+python eeg_decode.py
 ```
 
 Open **http://localhost:8080/index.html**. The page calls **http://localhost:8000** — keep both running. Console should show `[Backend] online`.
@@ -111,21 +121,23 @@ Sent by the client:
 
 ## EEG live decode → emotion + blink → scene
 
-### How it works
+### Dual mode (default UI): `eeg_decode_dual.py`
+
+Two boards in parallel → one WebSocket. The client uses `world-camera/eeg-bridge-dual.js` and fills `window.__dreamEEG1`, `__dreamEEG2`, `__dreamEEG` (active user), plus symbiosis scores.
 
 ```
-Python (eeg_decode.py)                     Browser (index.html)
-──────────────────────                     ─────────────────────
-EEG hardware / LSL / serial                ← WebSocket (100 ms) ←
-↓                                          reads window.__dreamEEG
-decode() → arousal, valence, focus, blink  ↓
-→ JSON over ws://127.0.0.1:8765  ──────►  1. HUD shows A / V / F numbers
-                                           2. mood pad + focus slider move
-                                           3. applyEmotion() → fog, sky, light
-                                           4. blink edge → "capture" → place UI
+Python (eeg_decode_dual.py)                Browser (index.html)
+───────────────────────────                ─────────────────────
+User1: LiveDecoder (GTECH)                 ← ws://127.0.0.1:8765
+User2: CytonDecoder (OpenBCI)              dual EEG bridge + Neural Symbiosis UI
+→ JSON with user1, user2, active_user, symbiosis, capture
 ```
 
-### JSON sent every 100 ms
+### Single-board mode: `eeg_decode.py`
+
+One g.tec headset — JSON shape is flat (`present`, `blink`, `emotion`). Use when only `eeg_decode.py` is running.
+
+### JSON (single decoder) every 100 ms
 
 ```json
 {
@@ -135,11 +147,12 @@ decode() → arousal, valence, focus, blink  ↓
 }
 ```
 
-When a **blink ends** (eyes close → open), the Python decoder adds `"capture": true` to that frame. The browser treats this like `dream-blink-up` and opens the place dialog.
+When the active user **blinks** (dual) or a capture fires (single), the decoder may add `"capture": true`. The browser opens the place dialog on that event.
 
 ### Plugging in real hardware
 
-Subclass `EEGDecoder` in `eeg_decode.py` — override `setup()`, `read_raw()`, `decode()`. See the file for the full template and `MockDecoder` as an example.
+- **Dual:** see `backend/eeg_decode_dual.py` (threads + stdin to swap active user).  
+- **Single:** subclass `EEGDecoder` in `eeg_decode.py` — override `setup()`, `read_raw()`, `decode()`. See `MockDecoder` as an example.
 
 ### Old simple mock
 

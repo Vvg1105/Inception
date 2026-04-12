@@ -68,6 +68,27 @@
       color: #fff; background: rgba(80,60,200,0.85); border-color: rgba(80,60,200,0.6);
     }
 
+    /* ── Voice HUD ─────────────────────────────────────────────────────── */
+    #voice-hud {
+      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+      z-index: 80; display: flex; align-items: center; gap: 8px;
+      font-family: inherit; font-size: 9px; letter-spacing: 0.15em;
+      text-transform: uppercase; color: #888;
+      background: rgba(255,255,255,0.82); backdrop-filter: blur(6px);
+      border: 1px solid #ccc; border-radius: 4px; padding: 6px 16px;
+      pointer-events: none; opacity: 0; transition: opacity 0.25s;
+    }
+    #voice-hud.visible { opacity: 1; }
+    #voice-hud .voice-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: #bbb; transition: background 0.2s;
+    }
+    #voice-hud.listening .voice-dot { background: #e44; animation: voice-pulse 1s infinite; }
+    #voice-hud.command  .voice-dot  { background: #4a4; animation: voice-pulse 0.5s infinite; }
+    @keyframes voice-pulse {
+      0%,100% { opacity: 1; } 50% { opacity: 0.35; }
+    }
+
     /* ── World panel ───────────────────────────────────────────────────── */
     #world-btn {
       position: fixed; top: 20px; left: 20px; z-index: 70;
@@ -679,12 +700,12 @@
 
 <div id="hint">click the ground to place objects</div>
 
-<div id="mood">
+<div id="mood" title="Mood word from the A/V pad (symbiosis when dual EEG drives it). Subtext = focus band.">
   <div id="mood-state">desolate</div>
   <div id="mood-sub">unfocused</div>
 </div>
 
-<div id="eeg-hud">
+<div id="eeg-hud" title="Active user’s EEG: arousal / valence / focus + blink (mirror of whoever has creation).">
   <div id="eeg-hud-title">EEG</div>
   <div id="eeg-hud-vals">
     <span>A <b id="hud-arousal">—</b></span>
@@ -696,6 +717,9 @@
 
 <!-- Flythrough toggle -->
 <button id="flythrough-btn">fly</button>
+
+<!-- Voice HUD -->
+<div id="voice-hud"><span class="voice-dot"></span><span id="voice-label">say "hey dream"</span></div>
 
 <!-- World panel toggle -->
 <button id="world-btn">world</button>
@@ -769,6 +793,23 @@
   </div>
 
   <div class="wp-section">
+    <div class="wp-title">weather</div>
+    <div class="wp-row" style="flex-wrap:wrap;gap:4px;margin-bottom:4px">
+      <button type="button" class="eye-gaze-btn weather-preset" data-weather="happy" title="clear / bright" style="flex:1;min-width:52px;font-size:8px;padding:4px 2px">bright</button>
+      <button type="button" class="eye-gaze-btn weather-preset" data-weather="sad" title="overcast + rain" style="flex:1;min-width:52px;font-size:8px;padding:4px 2px">rain</button>
+      <button type="button" class="eye-gaze-btn weather-preset" data-weather="angry" title="dusk + lightning" style="flex:1;min-width:52px;font-size:8px;padding:4px 2px">storm</button>
+      <button type="button" class="eye-gaze-btn weather-preset" data-weather="fear" title="night" style="flex:1;min-width:52px;font-size:8px;padding:4px 2px">night</button>
+    </div>
+    <div class="wp-row" style="align-items:flex-start">
+      <label title="When on, EEG / symbiosis can change weather. Turn off to use only the buttons above.">EEG→weather</label>
+      <div style="flex:1;font-size:8px;color:#666;line-height:1.35;display:flex;align-items:center;gap:6px">
+        <input type="checkbox" id="eeg-drive-mood" checked style="margin:0;cursor:pointer" title="When dual EEG is live, neural symbiosis updates the mood pad, fog, and sky">
+        <label for="eeg-drive-mood" style="cursor:pointer;margin:0">Symbiosis → mood &amp; weather</label>
+      </div>
+    </div>
+  </div>
+
+  <div class="wp-section">
     <div class="wp-title">grid</div>
     <div class="wp-row">
       <label>brightness</label>
@@ -789,8 +830,18 @@
         <span id="eye-gaze-status" style="font-size:7px;color:#999;white-space:nowrap">off</span>
       </div>
     </div>
+    <div class="wp-row dual-eeg-row" style="align-items:center">
+      <label style="color:#88cc88" title="python backend/eeg_decode_dual.py">dual EEG</label>
+      <div style="flex:1;display:flex;align-items:center;gap:6px">
+        <div class="eye-gaze-actions" style="flex:1">
+          <button type="button" class="eye-gaze-btn" id="dual-eeg-connect" style="border-color:#88cc88;color:#336633">connect</button>
+          <button type="button" class="eye-gaze-btn" id="dual-eeg-disconnect" disabled>disconnect</button>
+        </div>
+        <span id="dual-eeg-status" style="font-size:7px;color:#999;white-space:nowrap">off</span>
+      </div>
+    </div>
     <div class="wp-row" style="align-items:center">
-      <label>EEG</label>
+      <label title="python backend/eeg_decode.py — one g.tec headset only">EEG single</label>
       <div style="flex:1;display:flex;align-items:center;gap:6px">
         <div class="eye-gaze-actions" style="flex:1">
           <button type="button" class="eye-gaze-btn" id="eeg-connect">connect</button>
@@ -806,16 +857,6 @@
         <span id="voice-status">off</span>
       </div>
     </div>
-    <div class="wp-row dual-eeg-row" style="align-items:center">
-      <label style="color:#88cc88">dual EEG</label>
-      <div style="flex:1;display:flex;align-items:center;gap:6px">
-        <div class="eye-gaze-actions" style="flex:1">
-          <button type="button" class="eye-gaze-btn" id="dual-eeg-connect" style="border-color:#88cc88;color:#336633">connect</button>
-          <button type="button" class="eye-gaze-btn" id="dual-eeg-disconnect" disabled>disconnect</button>
-        </div>
-        <span id="dual-eeg-status" style="font-size:7px;color:#999;white-space:nowrap">off</span>
-      </div>
-    </div>
   </div>
 
   <!-- hidden defaults for removed controls -->
@@ -828,7 +869,6 @@
   <input type="hidden" id="blink-open-build" value="1">
   <input type="hidden" id="blink-pause-cursor" value="">
   <select id="blink-source" style="display:none"><option value="auto" selected></option></select>
-  <input type="checkbox" id="eeg-drive-mood" checked style="display:none">
 
 </div>
 
@@ -2135,6 +2175,7 @@ function selectPlacedObject(root) {
 }
 
 canvas.addEventListener('click', (e) => {
+  if (flythrough.active) return;
   if (popupOpen) return;
 
   const dx = e.clientX - mouseDownXY.x;
@@ -2509,11 +2550,36 @@ const _moodCool = { r: 0x99, g: 0xbb, b: 0xdd };  // steel blue — readable on 
 function lerp(a, b, t) { return Math.round(a + (b - a) * t); }
 
 function updateMoodDisplay() {
-  const { arousal, valence, focus } = emotion;
+  let { arousal, valence, focus } = emotion;
 
-  // Pick word
-  const aIdx = Math.min(2, Math.floor(arousal * 3));
-  const vIdx = Math.min(2, Math.floor(valence * 3));
+  // Circumplex grid (fractured, radiant, …) from merged A/V — optional nudge from
+  // classifier labels (happy / sad / angry) so words track both scale + emotion tag
+  let vEff = valence;
+  let aEff = arousal;
+  const g1 = typeof window !== 'undefined' ? window.__dreamEEG1 : null;
+  const g2 = typeof window !== 'undefined' ? window.__dreamEEG2 : null;
+  const em1 = g1?.emotion;
+  const em2 = g2?.emotion;
+  const l1 = (em1?.label || '').toLowerCase();
+  const l2 = (em2?.label || '').toLowerCase();
+  if (l1 && l2) {
+    const isPos = (l) => l === 'happy';
+    const isNeg = (l) => l === 'sad' || l === 'angry';
+    if (isPos(l1) && isPos(l2)) {
+      vEff = Math.min(1, vEff + 0.12);
+    } else if (isNeg(l1) && isNeg(l2)) {
+      vEff = Math.max(0, vEff - 0.12);
+    } else if ((isPos(l1) && isNeg(l2)) || (isNeg(l1) && isPos(l2))) {
+      vEff = THREE.MathUtils.clamp(vEff * 0.92 + 0.5 * 0.08, 0, 1);
+      aEff = Math.min(1, aEff + 0.06);
+    }
+    if (l1 === 'angry' || l2 === 'angry') {
+      aEff = Math.min(1, aEff + 0.08);
+    }
+  }
+
+  const aIdx = Math.min(2, Math.floor(aEff * 3));
+  const vIdx = Math.min(2, Math.floor(vEff * 3));
   const fIdx = Math.min(2, Math.floor(focus   * 3));
   moodStateEl.textContent = MOOD_WORDS[aIdx][vIdx];
   moodSubEl.textContent   = FOCUS_WORDS[fIdx];
@@ -2850,6 +2916,15 @@ function switchWeatherTo(label) {
   setSkyPreset(WEATHER_STATES[label].sky);
 }
 
+(function wireWeatherPresets() {
+  document.querySelectorAll('.weather-preset').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const label = btn.getAttribute('data-weather');
+      if (label && WEATHER_STATES[label]) switchWeatherTo(label);
+    });
+  });
+})();
+
 // ── Visible sun disc (billboard) — warm colours, matches sky sun direction ────
 function createSunDisc() {
   const group = new THREE.Group();
@@ -3140,6 +3215,7 @@ worldBtn.addEventListener('click', () => {
 });
 let lastDreamBlinkOpenAt = 0;
 window.addEventListener('dream-blink-up', (e) => {
+  if (flythrough.active) return;
   const c = document.getElementById('blink-open-build');
   if (c && !c.value) return;
   if (popupOpen) return;
@@ -3273,13 +3349,34 @@ document.getElementById('gaze-sens')?.addEventListener('input', function () {
     }
   });
 
+  let autoRetryTimer = null;
+
   btnStop?.addEventListener('click', () => {
+    if (autoRetryTimer) { clearTimeout(autoRetryTimer); autoRetryTimer = null; }
     stopEyeGazeBridge();
     setEyeGazeUi(false);
     if (st) st.textContent = 'Disconnected';
   });
 
   setEyeGazeUi(false);
+
+  // Auto-connect on page load with retry
+  (async function autoConnect(attempt) {
+    const maxAttempts = 10;
+    const url = (urlEl && urlEl.value.trim()) || 'ws://127.0.0.1:8766';
+    try {
+      await startEyeGazeBridge(url);
+      setEyeGazeUi(true);
+      if (st) st.textContent = 'Connected — tracking iris';
+      console.info('[eye-gaze] auto-connected on attempt', attempt);
+    } catch (_) {
+      if (attempt < maxAttempts) {
+        autoRetryTimer = setTimeout(() => autoConnect(attempt + 1), 3000);
+      } else {
+        console.info('[eye-gaze] auto-connect gave up after', maxAttempts, 'attempts');
+      }
+    }
+  })(1);
 })();
 
 (function wireEEGBridgeButtons() {
@@ -3297,6 +3394,8 @@ document.getElementById('gaze-sens')?.addEventListener('input', function () {
     const url = (urlEl && urlEl.value.trim()) || 'ws://127.0.0.1:8765';
     if (st) st.textContent = 'Connecting…';
     try {
+      window.dispatchEvent(new CustomEvent('dream-stop-dual-eeg-auto-retry'));
+      stopDualEEGBridge();
       await startEEGBridge({ url });
       setEegUi(true);
       if (st) st.textContent = 'Live — emotion every 100ms, blink → place UI';
@@ -3407,6 +3506,7 @@ document.getElementById('gaze-sens')?.addEventListener('input', function () {
   const btnOff = document.getElementById('dual-eeg-disconnect');
   const urlEl  = document.getElementById('eeg-ws-url');        // reuse same URL
   const st     = document.getElementById('dual-eeg-status');
+  let dualAutoRetryTimer = null;
 
   function setDualUi(connected) {
     if (btnOn)  btnOn.disabled  =  connected;
@@ -3423,6 +3523,7 @@ document.getElementById('gaze-sens')?.addEventListener('input', function () {
     const url = (urlEl && urlEl.value.trim()) || 'ws://127.0.0.1:8765';
     if (st) st.textContent = 'Connecting…';
     try {
+      stopEEGBridge();
       await startDualEEGBridge({ url });
       setDualUi(true);
       if (st) st.textContent = 'Live — dual EEG + symbiosis';
@@ -3434,6 +3535,7 @@ document.getElementById('gaze-sens')?.addEventListener('input', function () {
   });
 
   btnOff?.addEventListener('click', () => {
+    if (dualAutoRetryTimer) { clearTimeout(dualAutoRetryTimer); dualAutoRetryTimer = null; }
     stopDualEEGBridge();
     setDualUi(false);
     if (st) st.textContent = 'off';
@@ -3447,6 +3549,29 @@ document.getElementById('gaze-sens')?.addEventListener('input', function () {
   });
 
   setDualUi(false);
+
+  // Auto-connect to backend/eeg_decode_dual.py (same port as single decoder — only one server at a time)
+  window.addEventListener('dream-stop-dual-eeg-auto-retry', () => {
+    if (dualAutoRetryTimer) { clearTimeout(dualAutoRetryTimer); dualAutoRetryTimer = null; }
+  });
+
+  (async function autoDualEEGConnect(attempt) {
+    const maxAttempts = 10;
+    const url = (urlEl && urlEl.value.trim()) || 'ws://127.0.0.1:8765';
+    try {
+      stopEEGBridge();
+      await startDualEEGBridge({ url });
+      setDualUi(true);
+      if (st) st.textContent = 'Live — dual EEG + symbiosis';
+      console.info('[dual-eeg] auto-connected on attempt', attempt);
+    } catch (_) {
+      if (attempt < maxAttempts) {
+        dualAutoRetryTimer = setTimeout(() => autoDualEEGConnect(attempt + 1), 3000);
+      } else {
+        console.info('[dual-eeg] auto-connect gave up — run: python backend/eeg_decode_dual.py');
+      }
+    }
+  })(1);
 })();
 
 // Ground colour
@@ -3543,6 +3668,10 @@ function syncEmotionFromEEG() {
   if (!chk || !chk.checked) return;
   if (!em) return;
 
+  // Dual EEG: symbiosis owns the mood pad + weather (see syncDualEmotionFromEEG)
+  const dualBridgeLive = !!(window.__dreamEEG1?.present || window.__dreamEEG2?.present);
+  if (dualBridgeLive && window.__dreamSymbiosis) return;
+
   const { arousal, valence, focus } = em;
   if (![arousal, valence, focus].every((n) => typeof n === 'number' && Number.isFinite(n))) return;
 
@@ -3586,14 +3715,49 @@ function _nucLabelColor(arousal, valence) {
   return `rgb(${r},${g},${b})`;
 }
 
-// Map symbiosis data to a weather state key
+// Map symbiosis → WEATHER_STATES: happy = sunny day, sad = rain, angry = dusk+lightning, fear = night black
+// Rebalanced so “sunny” appears whenever merged valence is neutral–positive; rain/night only when clearly negative or divergent.
 function _symbiosisWeather(sym) {
-  const { arousal, valence, score } = sym;
-  if (score > 0.75 && valence > 0.55)   return 'happy';    // resonant + positive = bright
-  if (score > 0.75 && arousal > 0.65)   return 'angry';    // resonant + energetic = electric
-  if (score < 0.30)                      return 'fear';     // fully divergent = ominous night
-  if (valence < 0.35)                    return 'sad';      // both sad = overcast
-  if (arousal > 0.65)                    return 'angry';    // both intense
+  const a = sym.arousal ?? 0.5;
+  const v = sym.valence ?? 0.5;
+  const score = sym.score ?? 0.5;
+  const sl = String(sym.label || '').toLowerCase();
+
+  // Black night — only strong misalignment or very dark merged affect
+  if (score < 0.20 || (sl === 'divergent' && v < 0.33 && a < 0.42)) {
+    return 'fear';
+  }
+
+  // Sunny / bright — default for neutral–positive merged valence
+  if (v >= 0.42 && a <= 0.70) {
+    return 'happy';
+  }
+
+  // Storm / orange dusk — high shared energy
+  if (a >= 0.68 && v >= 0.38) {
+    return 'angry';
+  }
+
+  // Rain / grey — clearly low valence, but not full night
+  if (v < 0.40) {
+    return 'sad';
+  }
+
+  // Label-specific nuance (so all four symbiosis words matter)
+  if (sl === 'drifting') {
+    return v < 0.44 ? 'sad' : (a > 0.65 ? 'angry' : 'happy');
+  }
+  if (sl === 'entangled') {
+    if (a > 0.60 && v < 0.38) return 'angry';
+    return v < 0.42 ? 'sad' : 'happy';
+  }
+  if (sl === 'resonant') {
+    return v >= 0.44 ? 'happy' : 'sad';
+  }
+
+  if (score > 0.75 && v > 0.52) return 'happy';
+  if (score > 0.75 && a > 0.68) return 'angry';
+  if (a > 0.66) return 'angry';
   return 'happy';
 }
 
@@ -3843,12 +4007,17 @@ function syncDualEmotionFromEEG() {
         switchWeatherTo(wLabel);
       }
 
-      // Drive scene emotion from symbiosis combined A/V
+      // Scene emotion = merged symbiosis A/V (matches shared neural state)
       emotion.arousal = THREE.MathUtils.clamp(sym.arousal, 0, 1);
       emotion.valence = THREE.MathUtils.clamp(sym.valence, 0, 1);
       emotion.focus   = THREE.MathUtils.clamp(
         ((g1?.emotion?.focus ?? 0.5) + (g2?.emotion?.focus ?? 0.5)) / 2, 0, 1
       );
+      setPadFromEmotion();
+      const fs = document.getElementById('s-focus');
+      const vf = document.getElementById('v-focus');
+      if (fs) fs.value = String(emotion.focus);
+      if (vf) vf.textContent = emotion.focus.toFixed(2);
       applyEmotion();
       updateMoodDisplay();
     }
@@ -4442,6 +4611,52 @@ function updateFlythrough(dt) {
   camera.lookAt(lookTarget);
 }
 
+// ── Flythrough narration (Web Speech Synthesis) ──────────────────────────
+const flyNarrate = {
+  lastSpoken: '',
+  lastSpokeAt: 0,
+  cooldownMs: 6000,
+  proximityDist: 18,
+  announced: new Set(),
+};
+
+function flySpeak(text) {
+  if (!window.speechSynthesis) return;
+  const now = Date.now();
+  if (text === flyNarrate.lastSpoken && now - flyNarrate.lastSpokeAt < flyNarrate.cooldownMs) return;
+  window.speechSynthesis.cancel();
+  const utt = new SpeechSynthesisUtterance(text);
+  utt.rate = 0.92;
+  utt.pitch = 0.95;
+  utt.volume = 0.8;
+  const voices = speechSynthesis.getVoices();
+  const preferred = voices.find(v => v.name.includes('Samantha'))
+                 || voices.find(v => v.lang.startsWith('en') && v.localService);
+  if (preferred) utt.voice = preferred;
+  speechSynthesis.speak(utt);
+  flyNarrate.lastSpoken = text;
+  flyNarrate.lastSpokeAt = now;
+}
+
+function flyCheckProximity() {
+  if (!flythrough.active || placedObjects.length === 0) return;
+  const camPos = camera.position;
+  for (let i = 0; i < placedObjects.length; i++) {
+    const obj = placedObjects[i];
+    const dist = camPos.distanceTo(obj.position);
+    const name = obj.userData.objectName || placedNames[i] || 'something';
+    const key = `${name}_${i}`;
+    if (dist < flyNarrate.proximityDist && !flyNarrate.announced.has(key)) {
+      flyNarrate.announced.add(key);
+      const clean = name.replace(/^[\w\s]*:\s*/, '').trim();
+      flySpeak(`Approaching ${clean}`);
+    }
+    if (dist > flyNarrate.proximityDist * 1.5) {
+      flyNarrate.announced.delete(`${name}_${i}`);
+    }
+  }
+}
+
 function startFlythrough() {
   flythrough.savedPos = camera.position.clone();
   flythrough.savedTarget = controls.target.clone();
@@ -4456,6 +4671,8 @@ function startFlythrough() {
   controls.enabled = false;
   canvas.style.cursor = 'crosshair';
   document.getElementById('flythrough-btn').classList.add('active');
+  flyNarrate.announced.clear();
+  flySpeak('Entering fly mode');
 }
 
 function stopFlythrough() {
@@ -4466,6 +4683,7 @@ function stopFlythrough() {
   if (flythrough.savedTarget) controls.target.copy(flythrough.savedTarget);
   camera.lookAt(controls.target);
   document.getElementById('flythrough-btn').classList.remove('active');
+  flySpeak('Exiting fly mode, into world mode');
 }
 
 canvas.addEventListener('mousemove', (e) => {
@@ -4478,6 +4696,135 @@ document.getElementById('flythrough-btn').addEventListener('click', () => {
   if (flythrough.active) stopFlythrough();
   else startFlythrough();
 });
+
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && flythrough.active) {
+    e.preventDefault();
+    stopFlythrough();
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Voice commands — "hey dream" wake word → speak object name → place it
+// ═══════════════════════════════════════════════════════════════════════════
+const voiceHud   = document.getElementById('voice-hud');
+const voiceLabel = document.getElementById('voice-label');
+
+const voice = {
+  recognition: null,
+  awake: false,
+  supported: false,
+};
+
+(function initVoice() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { console.warn('[Voice] SpeechRecognition not supported'); return; }
+  voice.supported = true;
+
+  const rec = new SR();
+  rec.continuous   = true;
+  rec.interimResults = false;
+  rec.lang         = 'en-US';
+  voice.recognition = rec;
+
+  rec.addEventListener('result', (e) => {
+    const last = e.results[e.results.length - 1];
+    if (!last.isFinal) return;
+    const text = last[0].transcript.trim().toLowerCase();
+    console.info('[Voice] heard:', text);
+
+    if (!voice.awake) {
+      if (text.includes('hey dream') || text.includes('a dream') || text.includes('hey, dream')) {
+        voice.awake = true;
+        voiceHud.className = 'command visible';
+        voiceLabel.textContent = 'listening…';
+        console.info('[Voice] wake word detected — ready for command');
+      }
+      return;
+    }
+
+    const flyStartPhrases = ['fly', 'start fly', 'i want to fly', 'wanna fly', 'let me fly', 'take off', 'launch'];
+    const flyStopPhrases  = ['stop fly', 'stop flying', 'land', 'come down', 'exit fly', 'end fly'];
+
+    const isFlyStopcmd = flyStopPhrases.some(p => text.includes(p));
+    const isFlyCmd     = !isFlyStopcmd && flyStartPhrases.some(p => text.includes(p));
+
+    if (isFlyCmd) {
+      voice.awake = false;
+      if (!flythrough.active) startFlythrough();
+      voiceHud.className = 'visible';
+      voiceLabel.textContent = 'entering fly mode';
+      console.info('[Voice] fly mode activated');
+      setTimeout(() => { voiceLabel.textContent = 'say "hey dream"'; }, 2500);
+      return;
+    }
+    if (isFlyStopcmd) {
+      voice.awake = false;
+      if (flythrough.active) stopFlythrough();
+      voiceHud.className = 'visible';
+      voiceLabel.textContent = 'back to world mode';
+      console.info('[Voice] fly mode stopped');
+      setTimeout(() => { voiceLabel.textContent = 'say "hey dream"'; }, 2500);
+      return;
+    }
+
+    voice.awake = false;
+    voiceHud.className = 'visible';
+    voiceLabel.textContent = `placing "${text}"…`;
+    console.info('[Voice] command:', text);
+    voicePlaceObject(text);
+
+    setTimeout(() => {
+      voiceHud.className = 'visible';
+      voiceLabel.textContent = 'say "hey dream"';
+    }, 2000);
+  });
+
+  rec.addEventListener('end', () => {
+    if (voice.supported) {
+      try { rec.start(); } catch (_) {}
+    }
+  });
+
+  rec.addEventListener('error', (e) => {
+    if (e.error === 'not-allowed') {
+      voice.supported = false;
+      voiceLabel.textContent = 'mic blocked';
+      return;
+    }
+    console.warn('[Voice] error:', e.error);
+  });
+
+  try {
+    rec.start();
+    voiceHud.classList.add('visible');
+    voiceHud.classList.add('listening');
+    console.info('[Voice] started — waiting for "hey dream"');
+  } catch (err) {
+    console.warn('[Voice] start failed:', err);
+  }
+})();
+
+function voicePlaceObject(spoken) {
+  const blend = getBlendedNdc();
+  raycaster.setFromCamera(blend, camera);
+  let hits = raycaster.intersectObject(ground, false);
+  if (hits.length === 0) {
+    raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+    hits = raycaster.intersectObject(ground, false);
+  }
+  if (hits.length === 0) return;
+  const pos = hits[0].point.clone();
+
+  const parsed = parseLabel(spoken);
+  parsed.userScale = 1;
+  const useVision = document.getElementById('vision-place')?.checked ?? false;
+  if (useVision || isTribeClass(spoken)) {
+    runVisionPipeline(spoken, pos, parsed);
+  } else {
+    placeObject(spoken, pos, parsed);
+  }
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Animation loop
@@ -4495,6 +4842,7 @@ function animate() {
 
   if (flythrough.active) {
     updateFlythrough(dt);
+    flyCheckProximity();
   } else {
     controls.update();
   }
