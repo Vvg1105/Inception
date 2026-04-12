@@ -12,7 +12,7 @@ Output: (batch, n_classes) logits
 import torch
 import torch.nn as nn
 
-EMOTIONS = ["sad", "happy"]
+EMOTIONS = ["sad", "happy", "neutral"]
 
 # ── Acquisition constants ─────────────────────────────────────────────────────
 FS           = 250          # Hz

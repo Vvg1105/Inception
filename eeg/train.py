@@ -41,7 +41,7 @@ CFG_PATH   = os.path.join(MODEL_DIR, "eegnet_config.json")
 # ── Model selection ───────────────────────────────────────────────────────────
 # "mlp"    — EmotionMLP: ~500 params, good for small datasets (< ~100 windows/class)
 # "eegnet" — EEGNet:   ~2500 params, better with larger datasets
-MODEL = "mlp"
+MODEL = "eegnet"
 
 # ── Hyper-parameters ──────────────────────────────────────────────────────────
 WINDOW       = N_SAMPLES   # 250 samples = 1 s
