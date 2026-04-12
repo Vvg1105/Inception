@@ -15,7 +15,7 @@
       user-select: none;
     }
 
-    #canvas { display: block; width: 100vw; height: 100vh; }
+    #canvas { display: block; width: 100vw; height: 100vh; cursor: none; }
 
     /* ── Hint ──────────────────────────────────────────────────────────── */
     #hint {
@@ -717,6 +717,7 @@
 
 <!-- Flythrough toggle -->
 <button id="flythrough-btn">fly</button>
+<button id="god-btn" style="position:fixed;top:20px;left:128px;z-index:70;font-family:inherit;font-size:9px;letter-spacing:0.18em;text-transform:uppercase;color:#888;background:rgba(255,255,255,0.7);border:1px solid #ccc;border-radius:3px;padding:5px 12px;cursor:pointer;backdrop-filter:blur(4px);transition:all 0.15s;">god</button>
 
 <!-- Voice HUD -->
 <div id="voice-hud"><span class="voice-dot"></span><span id="voice-label">say "hey dream"</span></div>
@@ -887,7 +888,10 @@
     <datalist id="place-object-datalist"></datalist>
     <div id="parse-preview" style="display:none"></div>
     <input type="hidden" id="obj-color" value="#ffffff">
-    <input type="checkbox" id="vision-place" checked style="display:none">
+    <div style="display:flex;align-items:center;gap:6px;margin-top:8px;">
+      <input type="checkbox" id="vision-place" checked style="accent-color:#6a6aaa;">
+      <label for="vision-place" style="font-size:9px;letter-spacing:0.08em;text-transform:uppercase;color:#888;cursor:pointer;user-select:none;">TRIBE vision pipeline</label>
+    </div>
     <div style="display:flex;align-items:center;gap:6px;margin-top:10px;">
       <label style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#888;white-space:nowrap;">scale</label>
       <input type="range" id="place-scale" min="0.1" max="5" step="0.1" value="1" style="flex:1;accent-color:#6a6aaa;">
@@ -1639,6 +1643,13 @@ fetch(`${BACKEND}/health`, { signal: AbortSignal.timeout(1500) })
 let _dreamSpeakAudio = null;
 let _ttsSpeaking = false;
 
+function _ensureRecognitionLive() {
+  console.info('[Voice] _ensureRecognitionLive called — recognition:', !!voice.recognition, 'supported:', voice.supported);
+  if (!voice.recognition || !voice.supported) return;
+  try { voice.recognition.start(); console.info('[Voice] recognition restarted via _ensureRecognitionLive'); }
+  catch (e) { console.info('[Voice] _ensureRecognitionLive start caught:', e.message, '(likely already running)'); }
+}
+
 async function dreamSpeak(text) {
   if (!backendOnline) return;
   try {
@@ -1650,7 +1661,7 @@ async function dreamSpeak(text) {
       body: JSON.stringify({ text }),
       signal: AbortSignal.timeout(15000),
     });
-    if (!res.ok) { console.warn('[TTS]', res.status); _ttsSpeaking = false; return; }
+    if (!res.ok) { console.warn('[TTS]', res.status); _ttsSpeaking = false; _ensureRecognitionLive(); return; }
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
     _dreamSpeakAudio = new Audio(url);
@@ -1658,12 +1669,17 @@ async function dreamSpeak(text) {
       URL.revokeObjectURL(url);
       _ttsSpeaking = false;
       console.info('[TTS] finished — mic open');
+      _ensureRecognitionLive();
     });
-    _dreamSpeakAudio.addEventListener('error', () => { _ttsSpeaking = false; });
+    _dreamSpeakAudio.addEventListener('error', () => {
+      _ttsSpeaking = false;
+      _ensureRecognitionLive();
+    });
     await _dreamSpeakAudio.play();
   } catch (e) {
     console.warn('[TTS] dreamSpeak failed:', e);
     _ttsSpeaking = false;
+    _ensureRecognitionLive();
   }
 }
 
@@ -2206,6 +2222,18 @@ function selectPlacedObject(root) {
   pan.classList.add('open');
 }
 
+// ── God mode ─────────────────────────────────────────────────────────────────
+let godMode = false;
+const GOD_ELEMENTS = ['bridge', 'skyscraper', 'tree', 'house', 'building'];
+const godBtn = document.getElementById('god-btn');
+godBtn.addEventListener('click', () => {
+  godMode = !godMode;
+  godBtn.style.color = godMode ? '#fff' : '#888';
+  godBtn.style.background = godMode ? 'rgba(100,60,180,0.85)' : 'rgba(255,255,255,0.7)';
+  godBtn.style.borderColor = godMode ? '#7a4abb' : '#ccc';
+  if (godMode) dreamSpeak('God mode activated.');
+});
+
 canvas.addEventListener('click', (e) => {
   if (flythrough.active) return;
   if (popupOpen) return;
@@ -2219,7 +2247,7 @@ canvas.addEventListener('click', (e) => {
 
   raycaster.setFromCamera(mouseNDC, camera);
 
-  if (placedObjects.length) {
+  if (!godMode && placedObjects.length) {
     const objHits = raycaster.intersectObjects(placedObjects, true);
     if (objHits.length > 0) {
       const root = findPlacedRoot(objHits[0].object);
@@ -2234,18 +2262,28 @@ canvas.addEventListener('click', (e) => {
 
   const hits = raycaster.intersectObject(ground, false);
   if (hits.length > 0) {
+    if (godMode) {
+      const pos = hits[0].point.clone();
+      const pick = GOD_ELEMENTS[Math.floor(Math.random() * GOD_ELEMENTS.length)];
+      const parsed = parseLabel(pick);
+      parsed.userScale = 0.6 + Math.random() * 0.8;
+      placeObject(pick, pos, parsed);
+      return;
+    }
     pendingPos = hits[0].point.clone();
     openPopup(e.clientX, e.clientY);
   }
 });
 
-function openPopup(cx, cy) {
+const _USER_NAMES = { 1: 'Sid', 2: 'Emiliano' };
+
+function openPopup(cx, cy, blinkUser) {
   if (flythrough.active) stopFlythrough();
   popupOpen        = true;
   syncOrbitFromPanels();
 
   const pw = 310, ph = 420;
-  const uiH = 80;  // approximate bottom bar height
+  const uiH = 80;
   const px = Math.min(cx + 12, window.innerWidth  - pw - 8);
   const py = Math.min(cy + 12, window.innerHeight - ph - uiH - 8);
 
@@ -2265,7 +2303,13 @@ function openPopup(cx, cy) {
   if (ps) ps.style.display = 'block';
   if (pp) pp.style.display = 'none';
   setTimeout(() => objectInput.focus(), 40);
-  dreamSpeak('What are we imagining today?');
+
+  const name = _USER_NAMES[blinkUser];
+  if (name) {
+    dreamSpeak(`Hey ${name}, we detected that you are imagining something, what are you imagining today?`);
+  } else {
+    dreamSpeak('What are we imagining today?');
+  }
   if (voiceLabel) voiceLabel.textContent = 'listening for your imagination…';
 }
 
@@ -2388,7 +2432,7 @@ placeBtn.addEventListener('click', async () => {
   closePopup();
 
   const useVision = document.getElementById('vision-place')?.checked ?? false;
-  if (useVision || isTribeClass(raw)) {
+  if (useVision && isTribeClass(raw)) {
     await runVisionPipeline(raw, pos, parsed);
   } else {
     placeObject(raw, pos, parsed);
@@ -3355,7 +3399,7 @@ window.addEventListener('dream-blink-up', (e) => {
   pendingPos = ghits[0].point.clone();
   const cx = ((blend.x + 1) * 0.5) * window.innerWidth;
   const cy = ((1 - blend.y) * 0.5) * window.innerHeight;
-  openPopup(cx, cy);
+  openPopup(cx, cy, eventUser);
 });
 
 document.getElementById('sun-elevation')?.addEventListener('input', function () {
@@ -4768,7 +4812,7 @@ function startFlythrough() {
   camera.position.y = flythrough.eyeHeight;
   flythrough.active = true;
   controls.enabled = false;
-  canvas.style.cursor = 'crosshair';
+  canvas.style.cursor = 'none';
   document.getElementById('flythrough-btn').classList.add('active');
   flyNarrate.announced.clear();
   flySpeak('Entering fly mode');
@@ -4777,7 +4821,7 @@ function startFlythrough() {
 function stopFlythrough() {
   flythrough.active = false;
   controls.enabled = true;
-  canvas.style.cursor = '';
+  canvas.style.cursor = 'none';
   if (flythrough.savedPos) camera.position.copy(flythrough.savedPos);
   if (flythrough.savedTarget) controls.target.copy(flythrough.savedTarget);
   camera.lookAt(controls.target);
@@ -4826,10 +4870,20 @@ const voice = {
   rec.lang         = 'en-US';
   voice.recognition = rec;
 
+  rec.addEventListener('audiostart', () => console.info('[Voice] 🎙️ audiostart — mic is capturing'));
+  rec.addEventListener('audioend',   () => console.info('[Voice] 🎙️ audioend — mic stopped capturing'));
+  rec.addEventListener('soundstart', () => console.info('[Voice] 🔊 soundstart — sound detected'));
+  rec.addEventListener('soundend',   () => console.info('[Voice] 🔊 soundend'));
+  rec.addEventListener('speechstart',() => console.info('[Voice] 💬 speechstart — speech detected'));
+  rec.addEventListener('speechend',  () => console.info('[Voice] 💬 speechend'));
+  rec.addEventListener('start',      () => console.info('[Voice] ▶️ recognition started (listening)'));
+
   rec.addEventListener('result', (e) => {
-    if (_ttsSpeaking) return;
+    console.info('[Voice] 📝 result event — _ttsSpeaking:', _ttsSpeaking, 'popupOpen:', popupOpen, 'results:', e.results.length);
+    if (_ttsSpeaking) { console.info('[Voice] ⏸️ ignoring result (TTS speaking)'); return; }
     const last = e.results[e.results.length - 1];
     const text = last[0].transcript.trim();
+    console.info('[Voice] 📝 transcript:', JSON.stringify(text), 'isFinal:', last.isFinal);
 
     if (popupOpen) {
       objectInput.value = text;
@@ -4892,28 +4946,70 @@ const voice = {
     }, 2000);
   });
 
+  let _micStream = null;
+  let _micReady  = false;
+
   rec.addEventListener('end', () => {
-    if (voice.supported) {
-      try { rec.start(); } catch (_) {}
-    }
+    console.info('[Voice] ⏹️ recognition ended — supported:', voice.supported, 'micReady:', _micReady);
+    if (!voice.supported || !_micReady) return;
+    setTimeout(() => {
+      try { rec.start(); console.info('[Voice] ♻️ recognition restarted after end'); }
+      catch (err) { console.warn('[Voice] ♻️ restart failed:', err.message); }
+    }, 150);
   });
 
   rec.addEventListener('error', (e) => {
-    if (e.error === 'not-allowed') {
-      voice.supported = false;
-      voiceLabel.textContent = 'mic blocked';
-      return;
-    }
-    console.warn('[Voice] error:', e.error);
+    console.warn('[Voice] ❌ error event:', e.error);
+    if (e.error === 'aborted') return;
+    if (e.error === 'not-allowed' && !_micReady) return;
   });
 
-  try {
-    rec.start();
-    voiceHud.classList.add('visible');
-    voiceHud.classList.add('listening');
-    console.info('[Voice] started — waiting for "hey dream"');
-  } catch (err) {
-    console.warn('[Voice] start failed:', err);
+  async function _acquireMicAndStart() {
+    try {
+      console.info('[Voice] requesting getUserMedia...');
+      _micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      console.info('[Voice] ✅ getUserMedia granted — mic stream active');
+      _micReady = true;
+      rec.start();
+      voiceHud.classList.add('visible', 'listening');
+      if (voiceLabel) voiceLabel.textContent = 'say "hey dream"';
+      console.info('[Voice] ✅ recognition started after getUserMedia');
+    } catch (err) {
+      console.warn('[Voice] getUserMedia denied:', err.message);
+      if (voiceLabel) voiceLabel.textContent = 'mic blocked — allow in site settings';
+    }
+  }
+
+  // Try immediately (works if permission already granted)
+  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    navigator.permissions?.query({ name: 'microphone' }).then(status => {
+      console.info('[Voice] mic permission state:', status.state);
+      if (status.state === 'granted') {
+        _acquireMicAndStart();
+      } else {
+        console.info('[Voice] mic not yet granted — waiting for user click');
+        if (voiceLabel) voiceLabel.textContent = 'click to enable mic';
+        const _kickMic = () => {
+          document.removeEventListener('click', _kickMic, true);
+          document.removeEventListener('touchstart', _kickMic, true);
+          _acquireMicAndStart();
+        };
+        document.addEventListener('click', _kickMic, true);
+        document.addEventListener('touchstart', _kickMic, true);
+      }
+    }).catch(() => {
+      // permissions.query not supported — just try on click
+      const _kickMic = () => {
+        document.removeEventListener('click', _kickMic, true);
+        document.removeEventListener('touchstart', _kickMic, true);
+        _acquireMicAndStart();
+      };
+      document.addEventListener('click', _kickMic, true);
+      document.addEventListener('touchstart', _kickMic, true);
+    });
+  } else {
+    console.warn('[Voice] getUserMedia not available');
+    voice.supported = false;
   }
 })();
 
@@ -4931,7 +5027,7 @@ function voicePlaceObject(spoken) {
   const parsed = parseLabel(spoken);
   parsed.userScale = 1;
   const useVision = document.getElementById('vision-place')?.checked ?? false;
-  if (useVision || isTribeClass(spoken)) {
+  if (useVision && isTribeClass(spoken)) {
     runVisionPipeline(spoken, pos, parsed);
   } else {
     placeObject(spoken, pos, parsed);
