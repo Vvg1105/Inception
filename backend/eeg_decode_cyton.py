@@ -4,8 +4,9 @@ EEG live decoder for OpenBCI Cyton (USB dongle) → WebSocket.
 Mirrors backend/eeg_decode.py but swaps the g.tec/gpype pipeline for BrainFlow.
 
 Emotion detection:
-  Default   : BrainFlow RESTFULNESS classifier (no model weights needed)
-  --eegnet  : Trained EEGNet/MLP from eeg/models/ (requires eeg/train.py first)
+  Default   : BrainFlow RESTFULNESS → happy/sad mapping
+  --eegnet  : Your trained model from `python eeg/train.py --cyton`
+              (loads eeg/models/eegnet_config_cyton.json + eegnet_emotion_cyton.pt)
 
 Run:
   python backend/eeg_decode_cyton.py --serial-port /dev/cu.usbserial-XXXX
@@ -45,11 +46,10 @@ if PROJECT_ROOT not in sys.path:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 EMOTION_AV: dict[str, tuple[float, float]] = {
-    "happy":       (0.70, 0.85),
-    "sad":         (0.25, 0.20),
-    "neutral":     (0.50, 0.50),
-    "relaxed":     (0.70, 0.85),
-    "not relaxed": (0.25, 0.20),
+    "happy":   (0.70, 0.85),
+    "sad":     (0.25, 0.20),
+    "neutral": (0.50, 0.50),
+    "angry":   (0.85, 0.25),
 }
 
 EMOTION_INTERVAL_S = 0.5
@@ -163,20 +163,25 @@ class CytonEEGNetDecoder:
     BrainFlow RESTFULNESS.
 
     Requires:
-      eeg/models/eegnet_emotion.pt
-      eeg/models/eegnet_config.json
-    Produced by: python eeg/train.py
+      eeg/models/eegnet_emotion_cyton.pt + eegnet_config_cyton.json
+      (or legacy paths under eeg/models/cyton/ or unsuffixed names)
+    Produced by: python eeg/train.py --cyton
+    (writes eegnet_config_cyton.json + eegnet_emotion_cyton.pt under eeg/models/)
     """
 
     def __init__(
         self,
         serial_port: str = "",
         *,
+        config_path: str = "",
+        weights_path: str = "",
         blink_profile: Optional[str] = None,
         blink_frontal_ch: int = 0,
         use_blink_paper: bool = True,
     ) -> None:
         self._serial_port = serial_port
+        self._config_path = config_path
+        self._weights_path = weights_path
         self._blink_profile = blink_profile
         self._blink_frontal_ch = blink_frontal_ch
         self._use_blink_paper = use_blink_paper
@@ -205,14 +210,11 @@ class CytonEEGNetDecoder:
         from eeg.cyton_stream import CytonBuffer, FS
         from eeg.eegnet import EEGNet, EmotionMLP
 
-        config_path  = os.path.join(PROJECT_ROOT, "eeg", "models", "eegnet_config.json")
-        weights_path = os.path.join(PROJECT_ROOT, "eeg", "models", "eegnet_emotion.pt")
-
-        if not os.path.isfile(config_path) or not os.path.isfile(weights_path):
-            raise FileNotFoundError(
-                "EEGNet model not found. Run 'python eeg/train.py' first, "
-                "or use the default BrainFlow RESTFULNESS mode (omit --eegnet)."
-            )
+        config_path, weights_path = _resolve_eegnet_paths(
+            self._config_path, self._weights_path
+        )
+        print(f"  [EEGNet] config:  {config_path}")
+        print(f"  [EEGNet] weights: {weights_path}")
 
         with open(config_path) as f:
             self._cfg = json.load(f)
@@ -473,6 +475,53 @@ def _default_blink_npz(name: str) -> Optional[str]:
     return p if os.path.isfile(p) else None
 
 
+def _resolve_eegnet_paths(
+    config_cli: str,
+    weights_cli: str,
+) -> tuple[str, str]:
+    """
+    Prefer paths from `python eeg/train.py --cyton`, then legacy layouts.
+
+    Returns (config_path, weights_path). Raises FileNotFoundError if no pair exists.
+    """
+    model_dir = os.path.join(PROJECT_ROOT, "eeg", "models")
+    if config_cli.strip() and weights_cli.strip():
+        cfg, w = config_cli.strip(), weights_cli.strip()
+        if os.path.isfile(cfg) and os.path.isfile(w):
+            return cfg, w
+        raise FileNotFoundError(
+            f"EEGNet paths not found:\n  config:  {cfg}\n  weights: {w}"
+        )
+
+    candidates = [
+        (
+            os.path.join(model_dir, "eegnet_config_cyton.json"),
+            os.path.join(model_dir, "eegnet_emotion_cyton.pt"),
+        ),
+        (
+            os.path.join(model_dir, "cyton", "eegnet_config.json"),
+            os.path.join(model_dir, "cyton", "eegnet_emotion.pt"),
+        ),
+        (
+            os.path.join(model_dir, "eegnet_config.json"),
+            os.path.join(model_dir, "eegnet_emotion.pt"),
+        ),
+    ]
+    for cfg, w in candidates:
+        if os.path.isfile(cfg) and os.path.isfile(w):
+            return cfg, w
+
+    tried = "\n".join(f"  {c}\n  {wt}" for c, wt in candidates)
+    raise FileNotFoundError(
+        "No EEGNet config + weights found. Train Cyton data first:\n"
+        "  python eeg/train.py --cyton\n"
+        "or pass explicit paths:\n"
+        "  --eegnet-config /path/to/eegnet_config_cyton.json "
+        "--eegnet-weights /path/to/eegnet_emotion_cyton.pt\n\n"
+        "Searched:\n" + tried
+    )
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="EEG live decode (OpenBCI Cyton) → WebSocket"
@@ -488,7 +537,15 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--eegnet", action="store_true",
-        help="Use trained EEGNet/MLP model instead of BrainFlow RESTFULNESS",
+        help="Use trained EEGNet/MLP (default: eegnet_*_cyton.* from train.py --cyton)",
+    )
+    parser.add_argument(
+        "--eegnet-config", default="",
+        help="Override config JSON (default: auto-detect cyton then legacy paths)",
+    )
+    parser.add_argument(
+        "--eegnet-weights", default="",
+        help="Override weights .pt (default: auto-detect cyton then legacy paths)",
     )
     parser.add_argument(
         "--blink-profile", default="",
@@ -515,6 +572,8 @@ if __name__ == "__main__":
     elif args.eegnet:
         decoder = CytonEEGNetDecoder(
             serial_port=args.serial_port,
+            config_path=args.eegnet_config,
+            weights_path=args.eegnet_weights,
             blink_profile=blink_path,
             blink_frontal_ch=args.blink_ch,
             use_blink_paper=not args.no_blink_paper,

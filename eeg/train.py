@@ -12,11 +12,17 @@ Split strategy
 
 Output
 ------
-  eeg/models/eegnet_emotion.pt   — model state dict (best val acc)
-  eeg/models/eegnet_config.json  — architecture / normalisation params
+  With --gtec  : eeg/models/eegnet_emotion_gtec.pt,  eegnet_config_gtec.json
+  With --cyton : eeg/models/eegnet_emotion_cyton.pt, eegnet_config_cyton.json
 
-Run with conda base (has torch + sklearn + numpy):
-  conda run -n base python eeg/train.py
+Binary vs multi-class
+----------------------
+  TRAIN_EMOTIONS = None  → train on every class in eeg/eegnet.py EMOTIONS (e.g. 3-way).
+  TRAIN_EMOTIONS = ["happy", "sad"]  → binary; other classes in the data are dropped.
+
+Run (pick one board; data must live under eeg/data/<board>/ from collect_data.py):
+  python eeg/train.py --cyton
+  python eeg/train.py --gtec
 """
 import os
 import sys
@@ -44,11 +50,10 @@ CFG_PATH   = os.path.join(MODEL_DIR, "eegnet_config.json")
 MODEL = "eegnet"
 
 # ── Label selection ───────────────────────────────────────────────────────────
-# Subset of EMOTIONS to train on. Set to None to use all emotions.
+# Subset of eegnet.EMOTIONS to train on, or None = all classes (multi-class).
 # Examples:
-#   TRAIN_EMOTIONS = ["sad", "happy"]      # binary classifier, ignores neutral data
-#   TRAIN_EMOTIONS = ["happy", "neutral"]  # binary, ignores sad data
-#   TRAIN_EMOTIONS = None                  # use all emotions (default)
+#   TRAIN_EMOTIONS = None                       # neutral + happy + sad (matches eegnet.py)
+#   TRAIN_EMOTIONS = ["happy", "neutral"]       # binary subset
 TRAIN_EMOTIONS = ["sad", "happy"]
 
 # ── Hyper-parameters ──────────────────────────────────────────────────────────
@@ -393,7 +398,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     board = "gtec" if args.gtec else "cyton"
-    # train.py lives in eeg/ — override the module-level paths before calling train()
+    # Rebind module-level paths before train() (same names as lines 36–39).
     DATA_DIR = os.path.join(os.path.dirname(__file__), "data", board)
     WEIGHTS  = os.path.join(MODEL_DIR, f"eegnet_emotion_{board}.pt")
     CFG_PATH = os.path.join(MODEL_DIR, f"eegnet_config_{board}.json")
