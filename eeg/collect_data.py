@@ -29,7 +29,7 @@ import numpy as np
 
 
 # ── Configuration ─────────────────────────────────────────────────────────────
-EMOTIONS     = ["sad", "happy", "angry"]
+EMOTIONS     = ["sad", "happy"]
 N_TRIALS     = 10    # trials per emotion
 TRIAL_SECS   = 5         # seconds per trial
 REST_SECS    = 0.5       # rest between trials (not recorded)
@@ -273,16 +273,6 @@ def _next_run_number(data_dir: str) -> int:
 def _setup_gtec():
     """Build and start a gpype pipeline for the g.tec BCI Core-8."""
     import gpype as gp
-    import gtec_ble as ble
-
-    print("\nScanning for BCI Core-8 (up to 6 s) ...")
-    devices = ble.Amplifier.get_connected_devices()
-    if not devices:
-        print("  ERROR: No BCI Core-8 found over BLE.")
-        print("  → Power on the headset and make sure Bluetooth is enabled.")
-        return None, None
-
-    print(f"  Found device(s): {devices}")
 
     p        = gp.Pipeline()
     source   = gp.BCICore8()
@@ -336,8 +326,6 @@ def main():
 
     if args.board == "gtec":
         pipeline, recorder = _setup_gtec()
-        if recorder is None:
-            return
     else:  # cyton
         recorder = _setup_cyton(args.port)
 
@@ -365,7 +353,6 @@ def main():
         print(f"{'─'*50}")
         for trial in range(N_TRIALS):
             input(f"  [Trial {trial+1}/{N_TRIALS}] Press Enter when ready ...")
-            countdown(3)
             print(f"  [REC] Feel {emotion.upper()} intensely for {TRIAL_SECS}s ...")
             recorder.start_recording(idx)
             progress_bar(TRIAL_SECS, emotion)

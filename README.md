@@ -38,7 +38,7 @@ python -m pipeline.neural_matrix --csv city_elements_dataset.csv --output output
 ```
 
 
-# EEG
+# EEGj
 
 Understanding which channels correspond to what placement will help you create a visualization map for EEG, live. 
 ### EEG 1 - GTECH
@@ -53,7 +53,7 @@ ch1 - fp2
 
 
 ### EEG 2 - OPENBCI
-ch0 - grey C3
+ch0 - grey fp2
 ch1 - purple C4
 ch2 - blue CZ
 ch3 - green T3
