@@ -1,3 +1,5 @@
+WORKING MODEL WITH EMOTION CLASSIFICATION:
+
 # imagine
 
 TRIBE v2 neural features for **text** and **photo→video** inputs, plus a small **sklearn** classifier on top.
