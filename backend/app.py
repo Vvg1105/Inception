@@ -708,23 +708,33 @@ class TTSRequest(BaseModel):
 @app.post("/api/tts")
 async def tts_proxy(req: TTSRequest):
     """Proxy ElevenLabs TTS so the API key stays server-side."""
+    import logging
+    log = logging.getLogger("tts")
     api_key = os.getenv("ELEVEN_LABS_API_KEY", "")
     if not api_key:
+        log.error("ELEVEN_LABS_API_KEY not set in environment")
         raise HTTPException(status_code=500, detail="ELEVEN_LABS_API_KEY not set")
-    async with httpx.AsyncClient(timeout=30) as client:
-        r = await client.post(
-            f"https://api.elevenlabs.io/v1/text-to-speech/{req.voice_id}",
-            headers={"xi-api-key": api_key, "Content-Type": "application/json"},
-            json={
-                "text": req.text,
-                "model_id": "eleven_flash_v2_5",
-                "voice_settings": {"stability": 0.5, "similarity_boost": 0.75},
-            },
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            r = await client.post(
+                f"https://api.elevenlabs.io/v1/text-to-speech/{req.voice_id}",
+                headers={"xi-api-key": api_key, "Content-Type": "application/json"},
+                json={
+                    "text": req.text,
+                    "model_id": "eleven_flash_v2_5",
+                    "voice_settings": {"stability": 0.5, "similarity_boost": 0.75},
+                },
+            )
+        if r.status_code != 200:
+            log.error("ElevenLabs returned %s: %s", r.status_code, r.text[:300])
+            raise HTTPException(status_code=r.status_code, detail=r.text[:300])
+        return StreamingResponse(
+            iter([r.content]),
+            media_type="audio/mpeg",
+            headers={"Cache-Control": "no-cache"},
         )
-    if r.status_code != 200:
-        raise HTTPException(status_code=r.status_code, detail=r.text[:300])
-    return StreamingResponse(
-        iter([r.content]),
-        media_type="audio/mpeg",
-        headers={"Cache-Control": "no-cache"},
-    )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        log.exception("TTS proxy error")
+        raise HTTPException(status_code=500, detail=str(exc)[:300])
