@@ -892,6 +892,10 @@
       <input type="checkbox" id="vision-place" checked style="accent-color:#6a6aaa;">
       <label for="vision-place" style="font-size:9px;letter-spacing:0.08em;text-transform:uppercase;color:#888;cursor:pointer;user-select:none;">TRIBE vision pipeline</label>
     </div>
+    <div style="display:flex;align-items:center;gap:6px;margin-top:4px;">
+      <input type="checkbox" id="voice-enabled" checked style="accent-color:#6a6aaa;">
+      <label for="voice-enabled" style="font-size:9px;letter-spacing:0.08em;text-transform:uppercase;color:#888;cursor:pointer;user-select:none;">Voice narration</label>
+    </div>
     <div style="display:flex;align-items:center;gap:6px;margin-top:10px;">
       <label style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:#888;white-space:nowrap;">scale</label>
       <input type="range" id="place-scale" min="0.1" max="5" step="0.1" value="1" style="flex:1;accent-color:#6a6aaa;">
@@ -1650,8 +1654,9 @@ function _ensureRecognitionLive() {
   catch (e) { console.info('[Voice] _ensureRecognitionLive start caught:', e.message, '(likely already running)'); }
 }
 
-async function dreamSpeak(text) {
+async function dreamSpeak(text, { force = false } = {}) {
   if (!backendOnline) return;
+  if (!force && !(document.getElementById('voice-enabled')?.checked)) return;
   try {
     if (_dreamSpeakAudio) { _dreamSpeakAudio.pause(); _dreamSpeakAudio = null; }
     _ttsSpeaking = true;
@@ -2391,7 +2396,7 @@ async function runVisionPipeline(prompt, pos, parsed) {
           const msg = JSON.parse(line);
           if (msg.stage === 'image') {
             showImaginedImage(msg.image_b64, msg.mime);
-            dreamSpeak('I am getting information that you are imagining something like this. Simulating FMRI signals from the TRIBE model');
+            dreamSpeak('I am getting information that you are imagining something like this. Simulating FMRI signals from the TRIBE model and decoding object into the three dimensional world', { force: true });
           } else if (msg.stage === 'classified') {
             clearTimeout(t);
             parsed.base = msg.place_key;
@@ -3376,19 +3381,28 @@ worldBtn.addEventListener('click', () => {
 let lastDreamBlinkOpenAt = 0;
 const _blinkUsedByUser = {};
 
+// Reset the one-shot blink guard when the active user (stage) changes
+window.addEventListener('dream-permission-change', (e) => {
+  const u = e.detail?.activeUser;
+  if (u) delete _blinkUsedByUser[u];
+  console.info('[Blink] permission changed to user', u, '— blink guard reset');
+});
+
 window.addEventListener('dream-blink-up', (e) => {
-  if (flythrough.active) return;
+  console.info('[Blink] dream-blink-up received:', e.detail);
+  if (flythrough.active) { console.info('[Blink] skipped — flythrough active'); return; }
   const c = document.getElementById('blink-open-build');
-  if (c && !c.value) return;
-  if (popupOpen) return;
+  if (c && !c.value) { console.info('[Blink] skipped — blink-open-build unchecked'); return; }
+  if (popupOpen) { console.info('[Blink] skipped — popup already open'); return; }
 
   const eventUser  = e.detail && e.detail.user;
   const activeUser = window.__dreamActiveUser;
-  if (eventUser && activeUser && eventUser !== activeUser) return;
+  if (eventUser && activeUser && eventUser !== activeUser) { console.info('[Blink] skipped — wrong user', eventUser, 'vs active', activeUser); return; }
 
   const uid = eventUser || activeUser || 1;
-  if (_blinkUsedByUser[uid]) return;
+  if (_blinkUsedByUser[uid]) { console.info('[Blink] skipped — already used for user', uid); return; }
   _blinkUsedByUser[uid] = true;
+  console.info('[Blink] ✅ opening popup for user', uid);
 
   const now = Date.now();
   if (now - lastDreamBlinkOpenAt < 280) return;
@@ -3720,7 +3734,6 @@ document.getElementById('gaze-sens')?.addEventListener('input', function () {
   });
 
   (async function autoDualEEGConnect(attempt) {
-    const maxAttempts = 10;
     const url = (urlEl && urlEl.value.trim()) || 'ws://127.0.0.1:8765';
     try {
       stopEEGBridge();
@@ -3729,11 +3742,7 @@ document.getElementById('gaze-sens')?.addEventListener('input', function () {
       if (st) st.textContent = 'Live — dual EEG + symbiosis';
       console.info('[dual-eeg] auto-connected on attempt', attempt);
     } catch (_) {
-      if (attempt < maxAttempts) {
-        dualAutoRetryTimer = setTimeout(() => autoDualEEGConnect(attempt + 1), 3000);
-      } else {
-        console.info('[dual-eeg] auto-connect gave up — run: python backend/eeg_decode_dual.py');
-      }
+      dualAutoRetryTimer = setTimeout(() => autoDualEEGConnect(attempt + 1), 3000);
     }
   })(1);
 })();
@@ -4887,6 +4896,8 @@ const voice = {
   rec.addEventListener('start',      () => console.info('[Voice] ▶️ recognition started (listening)'));
 
   rec.addEventListener('result', (e) => {
+    const voiceOn = document.getElementById('voice-enabled')?.checked ?? true;
+    if (!voiceOn) return;
     console.info('[Voice] 📝 result event — _ttsSpeaking:', _ttsSpeaking, 'popupOpen:', popupOpen, 'results:', e.results.length);
     if (_ttsSpeaking) { console.info('[Voice] ⏸️ ignoring result (TTS speaking)'); return; }
     const last = e.results[e.results.length - 1];
